@@ -1,0 +1,5 @@
+Send delta events, not full snapshots each tick.
+Batch outbound updates every 20–50ms if traffic spikes.
+Keep book state in engine; TS should be mostly routing/auth.
+Use a small queue between WS handler and engine; drop/slow abusive clients.
+Monitor: message rate, p95 engine latency, broadcast queue depth.

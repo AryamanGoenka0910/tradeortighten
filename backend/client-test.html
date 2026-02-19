@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+  <body>
+    <h1>WS Test</h1>
+    <pre id="log"></pre>
+
+    <script>
+      const log = (x) => {
+        document.getElementById("log").textContent += x + "\n";
+        console.log(x);
+      };
+
+      const ws = new WebSocket("ws://localhost:8080");
+
+      ws.onopen = () => {
+        log("connected");
+        ws.send(JSON.stringify({ type: "place", side: "buy", price: 100, qty: 5 }));
+      };
+
+      //ws.onmessage = (e) => log("server: " + e.data);
+      //ws.onerror = (e) => log("error: " + JSON.stringify(e));
+      ws.onclose = () => log("closed");
+    </script>
+  </body>
+</html>
