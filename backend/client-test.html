@@ -50,6 +50,12 @@
 
     <form id="place-form">
       <div class="row">
+        <strong>Client ID:</strong>
+        <code id="client-id"></code>
+        <button id="regen-client-id" type="button">Regenerate</button>
+      </div>
+
+      <div class="row">
         <strong>Side:</strong>
         <button class="side-btn active" id="buy-btn" type="button">Bid</button>
         <button class="side-btn" id="sell-btn" type="button">Ask</button>
@@ -82,6 +88,40 @@
       const form = document.getElementById("place-form");
       const priceInput = document.getElementById("price");
       const qtyInput = document.getElementById("qty");
+      const clientIdEl = document.getElementById("client-id");
+      const regenClientIdBtn = document.getElementById("regen-client-id");
+
+      const makeFakeUuid = () => {
+        if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
+          return globalThis.crypto.randomUUID();
+        }
+        // Simple fallback UUID-ish generator for older browsers.
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+          const r = Math.floor(Math.random() * 16);
+          const v = c === "x" ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        });
+      };
+
+      const getOrCreateClientId = () => {
+        const key = "orderbook-test-client-id";
+        let id = localStorage.getItem(key);
+        if (!id) {
+          id = makeFakeUuid();
+          localStorage.setItem(key, id);
+        }
+        return id;
+      };
+
+      let clientId = getOrCreateClientId();
+      clientIdEl.textContent = clientId;
+
+      regenClientIdBtn.addEventListener("click", () => {
+        clientId = makeFakeUuid();
+        localStorage.setItem("orderbook-test-client-id", clientId);
+        clientIdEl.textContent = clientId;
+        log("new clientId: " + clientId);
+      });
 
       const setSide = (side) => {
         selectedSide = side;
@@ -107,6 +147,7 @@
         e.preventDefault();
 
         const payload = {
+          clientId: clientId,
           type: "place",
           side: selectedSide,
           price: Number(priceInput.value),

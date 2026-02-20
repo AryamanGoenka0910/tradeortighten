@@ -6,12 +6,12 @@ namespace lob {
     OrderBook::OrderBook() = default;
 
     // check this error condition later
-    OrderBook::PlaceResult OrderBook::place_limit(Side side, Price price, Qty qty) {
+    OrderBook::PlaceResult OrderBook::place_limit(ClientId client_id, Side side, Price price, Qty qty) {
         if (qty <= 0 || price <= 0) {
             return PlaceResult{0, {}, 0};
         }
 
-        Order incoming_order{ids_.next(), side, price, qty};
+        Order incoming_order{ids_.next(), client_id, side, price, qty};
 
         std::vector<Trade> trades;
         if (side == Side::Buy) {
@@ -106,7 +106,7 @@ namespace lob {
             }
 
             Qty trade_qty = std::min(taker.qty, maker.qty);
-            out_trades.push_back(Trade{taker.id, maker.id, best_curr_price, trade_qty});
+            out_trades.push_back(Trade{taker.id, maker.id, taker.client_id, maker.client_id, best_curr_price, trade_qty});
 
             taker.qty -= trade_qty;
             maker.qty -= trade_qty;

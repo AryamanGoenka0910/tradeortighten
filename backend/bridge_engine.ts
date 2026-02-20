@@ -17,6 +17,7 @@ type EngineRequest = {
 type EngineResponse = { 
     reqId: string; 
     orderId: string;
+    clientId: string;
     op: "place" | "cancel" | "modify";
     status: boolean; 
     [k: string]: unknown 

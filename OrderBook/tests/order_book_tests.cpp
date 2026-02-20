@@ -10,10 +10,10 @@ static void test_no_match() {
     std::cout << "[Test 1] No match - orders rest\n";
     lob::OrderBook ob;
 
-    const auto r1 = ob.place_limit(lob::Side::Buy, 100, 5);
+    const auto r1 = ob.place_limit("1", lob::Side::Buy, 100, 5);
     print_order(r1, lob::Side::Buy, 100, 5);
 
-    const auto r2 = ob.place_limit(lob::Side::Sell, 101, 3);
+    const auto r2 = ob.place_limit("1", lob::Side::Sell, 101, 3);
     print_order(r2, lob::Side::Sell, 101, 3);
 
     assert(r1.trades.empty() && r1.remaining_qty == 5);
@@ -27,10 +27,10 @@ static void test_full_fill() {
     std::cout << "[Test 2] Full fill\n";
     lob::OrderBook ob;
 
-    const auto rm = ob.place_limit(lob::Side::Sell, 100, 10);
+    const auto rm = ob.place_limit("1", lob::Side::Sell, 100, 10);
     print_order(rm, lob::Side::Sell, 100, 10);
 
-    const auto r = ob.place_limit(lob::Side::Buy, 100, 10);
+    const auto r = ob.place_limit("1", lob::Side::Buy, 100, 10);
     print_order(r, lob::Side::Buy, 100, 10);
 
     assert(r.trades.size() == 1);
@@ -46,10 +46,10 @@ static void test_partial_fill_taker_larger() {
     std::cout << "[Test 3] Partial fill - taker larger than maker\n";
     lob::OrderBook ob;
 
-    const auto rm = ob.place_limit(lob::Side::Sell, 100, 4);
+    const auto rm = ob.place_limit("1", lob::Side::Sell, 100, 4);
     print_order(rm, lob::Side::Sell, 100, 4);
 
-    const auto r = ob.place_limit(lob::Side::Buy, 100, 10);
+    const auto r = ob.place_limit("1", lob::Side::Buy, 100, 10);
     print_order(r, lob::Side::Buy, 100, 10);
 
     assert(r.trades.size() == 1);
@@ -64,10 +64,10 @@ static void test_partial_fill_maker_larger() {
     std::cout << "[Test 4] Partial fill - maker larger than taker\n";
     lob::OrderBook ob;
 
-    const auto rm = ob.place_limit(lob::Side::Sell, 100, 10);
+    const auto rm = ob.place_limit("1", lob::Side::Sell, 100, 10);
     print_order(rm, lob::Side::Sell, 100, 10);
 
-    const auto r = ob.place_limit(lob::Side::Buy, 100, 3);
+    const auto r = ob.place_limit("1", lob::Side::Buy, 100, 3);
     print_order(r, lob::Side::Buy, 100, 3);
 
     assert(r.trades.size() == 1);
@@ -82,16 +82,16 @@ static void test_sweep_multiple_levels() {
     std::cout << "[Test 5] Sweep multiple ask levels\n";
     lob::OrderBook ob;
 
-    const auto rm1 = ob.place_limit(lob::Side::Sell, 100, 5);
+    const auto rm1 = ob.place_limit("1", lob::Side::Sell, 100, 5);
     print_order(rm1, lob::Side::Sell, 100, 5);
 
-    const auto rm2 = ob.place_limit(lob::Side::Sell, 101, 5);
+    const auto rm2 = ob.place_limit("1", lob::Side::Sell, 101, 5);
     print_order(rm2, lob::Side::Sell, 101, 5);
 
-    const auto rm3 = ob.place_limit(lob::Side::Sell, 102, 5);
+    const auto rm3 = ob.place_limit("1", lob::Side::Sell, 102, 5);
     print_order(rm3, lob::Side::Sell, 102, 5);
 
-    const auto r = ob.place_limit(lob::Side::Buy, 102, 12);
+    const auto r = ob.place_limit("1", lob::Side::Buy, 102, 12);
     print_order(r, lob::Side::Buy, 102, 12);
 
     assert(r.trades.size() == 3);
@@ -105,18 +105,18 @@ static void test_fifo_priority() {
     std::cout << "[Test 6] FIFO priority at same price\n";
     lob::OrderBook ob;
 
-    const auto r1 = ob.place_limit(lob::Side::Sell, 100, 3);
+    const auto r1 = ob.place_limit("1", lob::Side::Sell, 100, 3);
     print_order(r1, lob::Side::Sell, 100, 3);
 
-    const auto r2 = ob.place_limit(lob::Side::Sell, 100, 7);
+    const auto r2 = ob.place_limit("1", lob::Side::Sell, 100, 7);
     print_order(r2, lob::Side::Sell, 100, 7);
 
-    const auto r = ob.place_limit(lob::Side::Buy, 100, 5);
+    const auto r = ob.place_limit("1", lob::Side::Buy, 100, 5);
     print_order(r, lob::Side::Buy, 100, 5);
 
     assert(r.trades.size() == 2);
-    assert(r.trades[0].maker_id == r1.order_id && r.trades[0].qty == 3);
-    assert(r.trades[1].maker_id == r2.order_id && r.trades[1].qty == 2);
+    assert(r.trades[0].order_id_maker == r1.order_id && r.trades[0].qty == 3);
+    assert(r.trades[1].order_id_maker == r2.order_id && r.trades[1].qty == 2);
     assert(r.remaining_qty == 0);
     print_bbo(ob);
     std::cout << "  PASSED\n\n";
@@ -128,7 +128,7 @@ static void test_invalid_qty() {
     lob::OrderBook ob;
     bool threw = false;
     try {
-        ob.place_limit(lob::Side::Buy, 100, 0);
+        ob.place_limit("1", lob::Side::Buy, 100, 0);
     } catch (const std::invalid_argument&) {
         threw = true;
     }

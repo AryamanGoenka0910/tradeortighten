@@ -4,8 +4,10 @@
 namespace lob {
 
     struct Trade final {
-        OrderId taker_id{};
-        OrderId maker_id{};
+        OrderId order_id_taker{};
+        OrderId order_id_maker{};
+        ClientId taker_client_id{};
+        ClientId maker_client_id{};
         Price price{};
         Qty qty{};
     };

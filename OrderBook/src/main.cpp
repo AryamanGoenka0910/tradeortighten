@@ -15,8 +15,10 @@ IMPORTANT:
 namespace lob {
 void to_json(nlohmann::json& json_obj, const Trade& trade) {
     json_obj = nlohmann::json{
-        {"taker_id", trade.taker_id},
-        {"maker_id", trade.maker_id},
+        {"taker_order_id", trade.order_id_taker},
+        {"maker_order_id", trade.order_id_maker},
+        {"taker_client_id", trade.taker_client_id},
+        {"maker_client_id", trade.maker_client_id},
         {"price", trade.price},
         {"qty", trade.qty},
     };
@@ -30,12 +32,14 @@ int main() {
     while (std::getline(std::cin, incoming_message)) {
         auto req = nlohmann::json::parse(incoming_message);
         auto reqId = req["reqId"];
+        auto clientId = req["clientId"];
         auto operation = req["op"];
 
         if (operation == "place") {
 
             nlohmann::json resError;
             resError["reqId"] = reqId;
+            resError["clientId"] = clientId;
             resError["op"] = operation;
             resError["orderId"] = -1;
             resError["execution_status"] = false;
@@ -69,7 +73,7 @@ int main() {
                     continue;
                 }
 
-                auto result = ob.place_limit(side, price, qty); // Place Order Result
+                auto result = ob.place_limit(clientId, side, price, qty); // Place Order Result
                 if (result.order_id == 0) {
                     std::cerr << "Error: Invalid order" << std::endl; 
                     std::cout << resError.dump() << "\n" << std::flush;
@@ -81,6 +85,7 @@ int main() {
 
                 nlohmann::json res;
                 res["reqId"] = reqId;
+                res["clientId"] = clientId;
                 res["op"] = operation;
                 res["orderId"] = result.order_id;
                 res["execution_status"] = true;

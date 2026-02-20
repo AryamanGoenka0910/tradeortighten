@@ -25,6 +25,7 @@ namespace lob {
             };
             
             PlaceResult place_limit(
+                ClientId client_id,
                 Side side, 
                 Price price, 
                 Qty qty

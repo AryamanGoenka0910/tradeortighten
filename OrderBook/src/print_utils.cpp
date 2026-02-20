@@ -20,7 +20,7 @@ void print_order(
 
     for (const auto& trade : result.trades) {
         std::cerr << "    TRADE px=" << trade.price << " qty=" << trade.qty
-                  << " taker=" << trade.taker_id << " maker=" << trade.maker_id << "\n";
+                  << " taker=" << trade.taker_client_id << " maker=" << trade.maker_client_id << "\n";
     }
 }
 
