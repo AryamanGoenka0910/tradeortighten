@@ -1,9 +1,12 @@
 import { WebSocketServer } from "ws";
 import type { WebSocket as WsWebSocket } from "ws";
+import { EngineBridge } from "./bridge_engine.js";
 
 const wss = new WebSocketServer({ port: 8080 });
 
 console.log("WebSocket server running on ws://localhost:8080");
+const bridge = new EngineBridge();
+console.log("Bridge created");
 
 type ClientMessage = 
     | { type: "place", side: "buy" | "sell", price: number, qty: number }
@@ -13,7 +16,7 @@ type ClientMessage =
 wss.on("connection", (ws: WsWebSocket) => {
   console.log("Client connected");
 
-  ws.on("message", (raw) => {
+  ws.on("message", async (raw) => {
     try {
         // 1 Auth Check
 
@@ -25,6 +28,15 @@ wss.on("connection", (ws: WsWebSocket) => {
                 if (side !== "buy" && side !== "sell") {
                     throw new Error("Invalid side");
                 }
+                
+                const res = await bridge.request({
+                    op: "place",
+                    side: message.side,
+                    price: message.price,
+                    qty: message.qty,
+                });
+
+                console.log("Engine response: ", res);
 
                 // check with DB if money is enough
                 const price = message.price;

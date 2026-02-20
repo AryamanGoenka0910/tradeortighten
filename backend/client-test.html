@@ -1,25 +1,126 @@
 <!doctype html>
 <html>
+  <head>
+    <meta charset="utf-8" />
+    <title>OrderBook UI Test</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 720px;
+        margin: 24px auto;
+        padding: 0 12px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      .side-btn {
+        padding: 8px 12px;
+        border: 1px solid #999;
+        border-radius: 6px;
+        cursor: pointer;
+        background: #f7f7f7;
+      }
+      .side-btn.active {
+        border-color: #333;
+        background: #e9e9e9;
+        font-weight: 700;
+      }
+      input {
+        padding: 8px;
+        width: 140px;
+      }
+      button[type="submit"] {
+        padding: 8px 14px;
+      }
+      #log {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 10px;
+        min-height: 220px;
+        background: #fafafa;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
   <body>
-    <h1>WS Test</h1>
+    <h1>OrderBook UI Test</h1>
+
+    <form id="place-form">
+      <div class="row">
+        <strong>Side:</strong>
+        <button class="side-btn active" id="buy-btn" type="button">Bid</button>
+        <button class="side-btn" id="sell-btn" type="button">Ask</button>
+        <span id="selected-side">buy</span>
+      </div>
+
+      <div class="row">
+        <label for="price">Price</label>
+        <input id="price" name="price" type="number" min="1" step="1" value="100" required />
+
+        <label for="qty">Qty</label>
+        <input id="qty" name="qty" type="number" min="1" step="1" value="5" required />
+
+        <button type="submit">Submit</button>
+      </div>
+    </form>
+
     <pre id="log"></pre>
 
     <script>
+      let selectedSide = "buy";
       const log = (x) => {
         document.getElementById("log").textContent += x + "\n";
         console.log(x);
       };
 
+      const buyBtn = document.getElementById("buy-btn");
+      const sellBtn = document.getElementById("sell-btn");
+      const selectedSideLabel = document.getElementById("selected-side");
+      const form = document.getElementById("place-form");
+      const priceInput = document.getElementById("price");
+      const qtyInput = document.getElementById("qty");
+
+      const setSide = (side) => {
+        selectedSide = side;
+        buyBtn.classList.toggle("active", side === "buy");
+        sellBtn.classList.toggle("active", side === "sell");
+        selectedSideLabel.textContent = side;
+      };
+
+      buyBtn.addEventListener("click", () => setSide("buy"));
+      sellBtn.addEventListener("click", () => setSide("sell"));
+
       const ws = new WebSocket("ws://localhost:8080");
 
       ws.onopen = () => {
         log("connected");
-        ws.send(JSON.stringify({ type: "place", side: "buy", price: 100, qty: 5 }));
       };
 
-      //ws.onmessage = (e) => log("server: " + e.data);
-      //ws.onerror = (e) => log("error: " + JSON.stringify(e));
+      ws.onmessage = (e) => log("server: " + e.data);
+      ws.onerror = () => log("error: websocket error");
       ws.onclose = () => log("closed");
+
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+
+        const payload = {
+          type: "place",
+          side: selectedSide,
+          price: Number(priceInput.value),
+          qty: Number(qtyInput.value),
+        };
+
+        if (ws.readyState !== WebSocket.OPEN) {
+          log("socket not open; cannot send");
+          return;
+        }
+
+        ws.send(JSON.stringify(payload));
+        log("client: " + JSON.stringify(payload));
+      });
     </script>
   </body>
 </html>

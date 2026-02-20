@@ -3,6 +3,26 @@
 #include "order_book.h"
 #include "print_utils.h"
 
+/*
+OrderBook Engine API:
+
+IMPORTANT: 
+ - All operations are async and return a Promise
+ - Opperations are only validated for OrderBook correctness, not for backend validation for game logic
+            
+*/
+
+namespace lob {
+void to_json(nlohmann::json& json_obj, const Trade& trade) {
+    json_obj = nlohmann::json{
+        {"taker_id", trade.taker_id},
+        {"maker_id", trade.maker_id},
+        {"price", trade.price},
+        {"qty", trade.qty},
+    };
+}
+} // namespace lob
+
 int main() {
     lob::OrderBook ob;
     std::string incoming_message;
@@ -13,31 +33,68 @@ int main() {
         auto operation = req["op"];
 
         if (operation == "place") {
-            auto side = req["side"];
-            if (side == "buy") {
-                side = lob::Side::Buy;
-            } else if (side == "sell") {
-                side = lob::Side::Sell;
-            } else {
-                throw std::invalid_argument("Invalid side");
+
+            nlohmann::json resError;
+            resError["reqId"] = reqId;
+            resError["op"] = operation;
+            resError["orderId"] = -1;
+            resError["execution_status"] = false;
+            resError["order_status"] = "Invalid order";
+            resError["trades"] = nlohmann::json::array();
+
+            try {
+                auto side_string = req.at("side").get<std::string>();
+                lob::Side side;
+                if (side_string == "buy") {
+                    side = lob::Side::Buy;
+                } else if (side_string == "sell") {
+                    side = lob::Side::Sell;
+                } else {
+                    std::cerr << "Error: Invalid side" << std::endl; 
+                    std::cout << resError.dump() << "\n" << std::flush;
+                    continue;
+                }
+
+                auto price = req.at("price").get<int>();
+                if (price <= 0) {
+                    std::cerr << "Error: Invalid price" << std::endl; 
+                    std::cout << resError.dump() << "\n" << std::flush;
+                    continue;
+                }
+                
+                auto qty = req.at("qty").get<int>(); // check they can afford this in backend not this orderbook engine
+                if (qty <= 0) {
+                    std::cerr << "Error: Invalid quantity" << std::endl; 
+                    std::cout << resError.dump() << "\n" << std::flush;
+                    continue;
+                }
+
+                auto result = ob.place_limit(side, price, qty); // Place Order Result
+                if (result.order_id == 0) {
+                    std::cerr << "Error: Invalid order" << std::endl; 
+                    std::cout << resError.dump() << "\n" << std::flush;
+                    continue;
+                }
+
+                print_order(result, side, price, qty);
+                print_bbo(ob);
+
+                nlohmann::json res;
+                res["reqId"] = reqId;
+                res["op"] = operation;
+                res["orderId"] = result.order_id;
+                res["execution_status"] = true;
+                res["order_status"] = (result.remaining_qty == qty ? "pending" : (result.remaining_qty > 0 ? "partially_filled" : "filled"));
+                res["trades"] = result.trades;
+
+                std::cout << res.dump() << "\n" << std::flush;
+
+            } catch (const std::exception& e) {
+                std::cerr << "Error: " << e.what() << std::endl;
+                std::cout << resError.dump() << "\n" << std::flush;
+                continue;
             }
-            
-            auto price = req.at("price").get<int>();
-            auto qty = req.at("qty").get<int>();
-
-            auto result = ob.place_limit(side, price, qty);
-
-            print_order(result, side, price, qty);
-            print_bbo(ob);
         }
-
-        nlohmann::json res;
-        res["reqId"] = reqId;
-        res["orderId"] = reqId;
-        res["ok"] = true;
-        res["data"] = "success";
-
-        std::cout << res.dump() << "\n" << std::flush;
     }
 
     return 0;

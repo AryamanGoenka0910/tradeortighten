@@ -5,8 +5,11 @@ namespace lob {
 
     OrderBook::OrderBook() = default;
 
+    // check this error condition later
     OrderBook::PlaceResult OrderBook::place_limit(Side side, Price price, Qty qty) {
-        if (qty <= 0) throw std::invalid_argument("OrderBook::place_limit qty must be > 0");
+        if (qty <= 0 || price <= 0) {
+            return PlaceResult{0, {}, 0};
+        }
 
         Order incoming_order{ids_.next(), side, price, qty};
 
