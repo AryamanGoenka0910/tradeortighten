@@ -3,7 +3,7 @@
 
 namespace lob {
 
-// Simple monotonic generator (deterministic, single-thread friendly).
+// Simple monotonic generator.
 class IdGenerator final {
  public:
   explicit IdGenerator(OrderId start = 1) : next_(start) {}

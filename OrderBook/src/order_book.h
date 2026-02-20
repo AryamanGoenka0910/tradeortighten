@@ -58,6 +58,12 @@ namespace lob {
 
             void match_buy(Order& taker, std::vector<Trade>& out_trades);
             void match_sell(Order& taker, std::vector<Trade>& out_trades);
+            void price_level_match(
+                Order& taker,
+                std::vector<Trade>& out_trades,
+                PriceLevel& best_curr_level,
+                const Price& best_curr_price
+            );
     };
 }
 

@@ -24,6 +24,7 @@ namespace lob {
         return PlaceResult{incoming_order.id, trades, incoming_order.qty};
     }
 
+    // change to iterator approach for better performance on phantom levels
     std::optional<std::pair<Price, Qty>> OrderBook::best_bid() const {
         if (bids_.empty()) return std::nullopt;
         const auto& [px, lvl] = *bids_.begin();
@@ -56,33 +57,7 @@ namespace lob {
                 break; // No more matching possible
             }
 
-            while (taker.qty > 0 && !best_curr_level.empty()) {
-                OrderId maker_id = best_curr_level.front();
-                auto mit = order_map.find(maker_id);
-                if (mit == order_map.end()) {
-                    best_curr_level.pop_front();
-                    continue;
-                }
-                Order& maker = mit->second;
-                if (maker.qty == 0) {
-                    best_curr_level.pop_front();
-                    order_map.erase(maker_id);
-                    continue;
-                }
-
-                Qty trade_qty = std::min(taker.qty, maker.qty);
-                out_trades.push_back(Trade{taker.id, maker.id, best_curr_price, trade_qty});
-
-                taker.qty -= trade_qty;
-                maker.qty -= trade_qty;
-
-                best_curr_level.reduce_total(trade_qty);
-                if (maker.qty == 0) {
-                    best_curr_level.pop_front();
-                    order_map.erase(maker_id);
-                }
-                
-            }
+            this->price_level_match(taker, out_trades, best_curr_level, best_curr_price);
 
             if (best_curr_level.empty()) {
                 bids_.erase(current_price_level_it);
@@ -99,37 +74,46 @@ namespace lob {
                 break; // No more matching possible
             }
 
-            while (taker.qty > 0 && !best_curr_level.empty()) {
-                OrderId maker_id = best_curr_level.front();
-                auto mit = order_map.find(maker_id);
-                if (mit == order_map.end()) {
-                    best_curr_level.pop_front();
-                    continue;
-                }
-                Order& maker = mit->second;
-                if (maker.qty == 0) {
-                    best_curr_level.pop_front();
-                    order_map.erase(maker_id);
-                    continue;
-                }
-
-                Qty trade_qty = std::min(taker.qty, maker.qty);
-                out_trades.push_back(Trade{taker.id, maker.id, best_curr_price, trade_qty});
-
-                taker.qty -= trade_qty;
-                maker.qty -= trade_qty;
-
-                best_curr_level.reduce_total(trade_qty);
-                if (maker.qty == 0) {
-                    best_curr_level.pop_front();
-                    order_map.erase(maker_id);
-                }
-                
-            }
+            this->price_level_match(taker, out_trades, best_curr_level, best_curr_price);
 
             if (best_curr_level.empty()) {
                 asks_.erase(current_price_level_it);
             }
+        }
+    }
+
+    void OrderBook::price_level_match(
+        Order& taker,
+        std::vector<Trade>& out_trades,
+        PriceLevel& best_curr_level,
+        const Price& best_curr_price
+    ) {
+        while (taker.qty > 0 && !best_curr_level.empty()) {
+            OrderId maker_id = best_curr_level.front();
+            auto mit = order_map.find(maker_id);
+            if (mit == order_map.end()) {
+                best_curr_level.pop_front();
+                continue;
+            }
+            Order& maker = mit->second;
+            if (maker.qty == 0) {
+                best_curr_level.pop_front();
+                order_map.erase(maker_id);
+                continue;
+            }
+
+            Qty trade_qty = std::min(taker.qty, maker.qty);
+            out_trades.push_back(Trade{taker.id, maker.id, best_curr_price, trade_qty});
+
+            taker.qty -= trade_qty;
+            maker.qty -= trade_qty;
+
+            best_curr_level.reduce_total(trade_qty);
+            if (maker.qty == 0) {
+                best_curr_level.pop_front();
+                order_map.erase(maker_id);
+            }
+            
         }
     }
 
@@ -161,6 +145,7 @@ namespace lob {
         order_it->second.qty = 0;
     }
 
+    // adjust queue priority
     void OrderBook::modify_order(OrderId order_id, Qty qty){
         if (qty < 0) throw std::invalid_argument("OrderBook::modify_order qty must be > 0");
         auto order_it = order_map.find(order_id);
