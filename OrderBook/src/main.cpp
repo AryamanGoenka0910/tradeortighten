@@ -43,7 +43,7 @@ int main() {
             resError["op"] = operation;
             resError["orderId"] = -1;
             resError["execution_status"] = false;
-            resError["order_status"] = "Invalid order";
+            // resError["order_status"] = "Invalid order";
             resError["trades"] = nlohmann::json::array();
 
             try {
@@ -89,7 +89,7 @@ int main() {
                 res["op"] = operation;
                 res["orderId"] = result.order_id;
                 res["execution_status"] = true;
-                res["order_status"] = (result.remaining_qty == qty ? "pending" : (result.remaining_qty > 0 ? "partially_filled" : "filled"));
+                // res["order_status"] = (result.remaining_qty == qty ? "pending" : (result.remaining_qty > 0 ? "partially_filled" : "filled"));
                 res["trades"] = result.trades;
 
                 std::cout << res.dump() << "\n" << std::flush;

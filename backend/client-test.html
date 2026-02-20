@@ -43,6 +43,26 @@
         background: #fafafa;
         white-space: pre-wrap;
       }
+      #rejections {
+        border: 1px solid #f3c7c7;
+        background: #fff0f0;
+        border-radius: 6px;
+        padding: 8px 10px;
+        margin: 10px 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 10px 0 14px;
+      }
+      th, td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+      }
+      th {
+        background: #f3f3f3;
+      }
     </style>
   </head>
   <body>
@@ -73,10 +93,29 @@
       </div>
     </form>
 
+    <h3>My Orders</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Order ID</th>
+          <th>Side</th>
+          <th>Price</th>
+          <th>Original Qty</th>
+          <th>Current Qty</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="orders-body"></tbody>
+    </table>
+
+    <div id="rejections" hidden></div>
+
+    <h3>Event Log</h3>
     <pre id="log"></pre>
 
     <script>
       let selectedSide = "buy";
+      let ordersById = new Map();
       const log = (x) => {
         document.getElementById("log").textContent += x + "\n";
         console.log(x);
@@ -90,6 +129,33 @@
       const qtyInput = document.getElementById("qty");
       const clientIdEl = document.getElementById("client-id");
       const regenClientIdBtn = document.getElementById("regen-client-id");
+      const ordersBody = document.getElementById("orders-body");
+      const rejectionsEl = document.getElementById("rejections");
+
+      const renderOrders = () => {
+        const rows = Array.from(ordersById.values()).sort((a, b) => a.orderId - b.orderId);
+        if (rows.length === 0) {
+          ordersBody.innerHTML = '<tr><td colspan="6">No orders yet</td></tr>';
+          return;
+        }
+
+        ordersBody.innerHTML = rows
+          .map(
+            (o) => `
+              <tr>
+                <td>${o.orderId}</td>
+                <td>${o.side}</td>
+                <td>${o.price}</td>
+                <td>${o.originalQty}</td>
+                <td>${o.currentQty}</td>
+                <td>${o.status}</td>
+              </tr>
+            `
+          )
+          .join("");
+      };
+
+      renderOrders();
 
       const makeFakeUuid = () => {
         if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
@@ -120,6 +186,10 @@
         clientId = makeFakeUuid();
         localStorage.setItem("orderbook-test-client-id", clientId);
         clientIdEl.textContent = clientId;
+        ordersById = new Map();
+        rejectionsEl.hidden = true;
+        rejectionsEl.textContent = "";
+        renderOrders();
         log("new clientId: " + clientId);
       });
 
@@ -139,7 +209,26 @@
         log("connected");
       };
 
-      ws.onmessage = (e) => log("server: " + e.data);
+      ws.onmessage = (e) => {
+        log("server: " + e.data);
+        let msg;
+        try {
+          msg = JSON.parse(e.data);
+        } catch {
+          return;
+        }
+
+        if (msg.type === "order_state_snapshot" && msg.clientId === clientId && Array.isArray(msg.orders)) {
+          ordersById = new Map(msg.orders.map((order) => [order.orderId, order]));
+          renderOrders();
+          return;
+        }
+
+        if (msg.type === "place_rejected") {
+          rejectionsEl.hidden = false;
+          rejectionsEl.textContent = `Rejected: ${msg.reason ?? "unknown reason"}`;
+        }
+      };
       ws.onerror = () => log("error: websocket error");
       ws.onclose = () => log("closed");
 

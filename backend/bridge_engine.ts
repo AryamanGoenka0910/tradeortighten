@@ -4,24 +4,11 @@ import readline from "node:readline";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
+import type { EngineRequest, EngineResponse, EngineTrade } from "./types.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const enginePath = path.resolve(__dirname, "../OrderBook/build/OrderBook");
-
-type EngineRequest = { 
-    reqId: string;
-    op: "place" | "cancel" | "modify"; 
-    [k: string]: unknown 
-};
-
-type EngineResponse = { 
-    reqId: string; 
-    orderId: string;
-    clientId: string;
-    op: "place" | "cancel" | "modify";
-    status: boolean; 
-    [k: string]: unknown 
-};
 
 export class EngineBridge {
         private child = spawn(enginePath, [], {
