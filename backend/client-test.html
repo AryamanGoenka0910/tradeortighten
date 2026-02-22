@@ -76,6 +76,15 @@
       </div>
 
       <div class="row">
+        <label for="client-username"><strong>Username:</strong></label>
+        <input id="client-username" name="clientUsername" type="text" placeholder="optional" />
+        <span>
+          <strong>Last seq:</strong>
+          <code id="last-seq">0</code>
+        </span>
+      </div>
+
+      <div class="row">
         <strong>Side:</strong>
         <button class="side-btn active" id="buy-btn" type="button">Bid</button>
         <button class="side-btn" id="sell-btn" type="button">Ask</button>
@@ -93,10 +102,24 @@
       </div>
     </form>
 
+    <h3>My Portfolio</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Asset</th>
+          <th>Available</th>
+          <th>Reserved</th>
+        </tr>
+      </thead>
+      <tbody id="portfolio-body"></tbody>
+    </table>
+
     <h3>My Orders</h3>
     <table>
       <thead>
         <tr>
+          <th>Seq</th>
+          <th>Client Order ID</th>
           <th>Order ID</th>
           <th>Side</th>
           <th>Price</th>
@@ -116,6 +139,7 @@
     <script>
       let selectedSide = "buy";
       let ordersById = new Map();
+      let portfolio = null;
       const log = (x) => {
         document.getElementById("log").textContent += x + "\n";
         console.log(x);
@@ -129,13 +153,40 @@
       const qtyInput = document.getElementById("qty");
       const clientIdEl = document.getElementById("client-id");
       const regenClientIdBtn = document.getElementById("regen-client-id");
+      const clientUsernameInput = document.getElementById("client-username");
+      const lastSeqEl = document.getElementById("last-seq");
+      const portfolioBody = document.getElementById("portfolio-body");
       const ordersBody = document.getElementById("orders-body");
       const rejectionsEl = document.getElementById("rejections");
+
+      const renderPortfolio = () => {
+        const p = portfolio;
+        const mk = (asset, available, reserved) => `
+          <tr>
+            <td>${asset}</td>
+            <td>${available ?? "-"}</td>
+            <td>${reserved ?? "-"}</td>
+          </tr>
+        `;
+
+        if (!p) {
+          portfolioBody.innerHTML = '<tr><td colspan="3">No portfolio snapshot yet</td></tr>';
+          return;
+        }
+
+        portfolioBody.innerHTML = [
+          mk("cash", p.cashAvailable, p.cashReserved),
+          mk("asset1", p.asset1Available, p.asset1Reserved),
+          mk("asset2", p.asset2Available, p.asset2Reserved),
+          mk("asset3", p.asset3Available, p.asset3Reserved),
+          mk("asset4", p.asset4Available, p.asset4Reserved),
+        ].join("");
+      };
 
       const renderOrders = () => {
         const rows = Array.from(ordersById.values()).sort((a, b) => a.orderId - b.orderId);
         if (rows.length === 0) {
-          ordersBody.innerHTML = '<tr><td colspan="6">No orders yet</td></tr>';
+          ordersBody.innerHTML = '<tr><td colspan="8">No orders yet</td></tr>';
           return;
         }
 
@@ -143,6 +194,8 @@
           .map(
             (o) => `
               <tr>
+                <td>${o.seq ?? "-"}</td>
+                <td><code>${o.clientOrderId ?? "-"}</code></td>
                 <td>${o.orderId}</td>
                 <td>${o.side}</td>
                 <td>${o.price}</td>
@@ -155,6 +208,7 @@
           .join("");
       };
 
+      renderPortfolio();
       renderOrders();
 
       const makeFakeUuid = () => {
@@ -179,16 +233,37 @@
         return id;
       };
 
+      const getSeqKey = (id) => `orderbook-test-last-seq:${id}`;
+      const getOrCreateLastSeq = (id) => {
+        const raw = localStorage.getItem(getSeqKey(id));
+        const n = raw ? Number(raw) : 0;
+        return Number.isFinite(n) && n >= 0 ? n : 0;
+      };
+      const setLastSeq = (id, n) => {
+        localStorage.setItem(getSeqKey(id), String(n));
+        lastSeqEl.textContent = String(n);
+      };
+
       let clientId = getOrCreateClientId();
       clientIdEl.textContent = clientId;
+      setLastSeq(clientId, getOrCreateLastSeq(clientId));
+
+      const usernameKey = "orderbook-test-client-username";
+      clientUsernameInput.value = localStorage.getItem(usernameKey) ?? "";
+      clientUsernameInput.addEventListener("input", () => {
+        localStorage.setItem(usernameKey, clientUsernameInput.value);
+      });
 
       regenClientIdBtn.addEventListener("click", () => {
         clientId = makeFakeUuid();
         localStorage.setItem("orderbook-test-client-id", clientId);
         clientIdEl.textContent = clientId;
         ordersById = new Map();
+        portfolio = null;
         rejectionsEl.hidden = true;
         rejectionsEl.textContent = "";
+        setLastSeq(clientId, 0);
+        renderPortfolio();
         renderOrders();
         log("new clientId: " + clientId);
       });
@@ -219,8 +294,25 @@
         }
 
         if (msg.type === "order_state_snapshot" && msg.clientId === clientId && Array.isArray(msg.orders)) {
-          ordersById = new Map(msg.orders.map((order) => [order.orderId, order]));
+          const next = new Map();
+          for (const order of msg.orders) {
+            const prev = ordersById.get(order.orderId);
+            next.set(order.orderId, { ...(prev ?? {}), ...order });
+          }
+          ordersById = next;
           renderOrders();
+          return;
+        }
+
+        if (msg.type === "portfolio_snapshot" && msg.clientId === clientId && msg.portfolio) {
+          portfolio = msg.portfolio;
+          renderPortfolio();
+          return;
+        }
+
+        if (msg.type === "place_duplicate_ignored" && msg.clientId === clientId) {
+          rejectionsEl.hidden = false;
+          rejectionsEl.textContent = `Duplicate ignored (seq=${msg.seq}, clientOrderId=${msg.clientOrderId}, dbOrderId=${msg.dbOrderId})`;
           return;
         }
 
@@ -235,9 +327,13 @@
       form.addEventListener("submit", (e) => {
         e.preventDefault();
 
+        const nextSeq = getOrCreateLastSeq(clientId) + 1;
+        const clientOrderId = makeFakeUuid();
         const payload = {
           clientId: clientId,
           type: "place",
+          seq: nextSeq,
+          clientOrderId,
           side: selectedSide,
           price: Number(priceInput.value),
           qty: Number(qtyInput.value),
@@ -249,6 +345,7 @@
         }
 
         ws.send(JSON.stringify(payload));
+        setLastSeq(clientId, nextSeq);
         log("client: " + JSON.stringify(payload));
       });
     </script>

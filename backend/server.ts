@@ -1,11 +1,12 @@
 import { WebSocketServer } from "ws";
 import type { WebSocket as WsWebSocket } from "ws";
 import { EngineBridge } from "./bridge_engine.js";
-
+import { pool } from "./src/db.js";
 
 const wss = new WebSocketServer({ port: 8080 });
 const clientSockets = new Map<string, WsWebSocket>();
 const clientOrderStates = new Map<string, Map<number, OrderState>>();
+const submittedToEngine = new Set<string>(); // clientId:seq
 
 type OrderState = {
   orderId: number;
@@ -45,7 +46,7 @@ const bridge = new EngineBridge();
 console.log("Bridge created");
 
 type ClientMessage = 
-    | { clientId: string, type: "place", side: "buy" | "sell", price: number, qty: number }
+    | { clientId: string, type: "place", seq: number, clientOrderId: string, side: "buy" | "sell", price: number, qty: number }
     | { clientId: string, type: "cancel", orderId: number }
     | { clientId: string, type: "modify", orderId: number, price: number, qty: number }
 
@@ -62,15 +63,45 @@ wss.on("connection", (ws: WsWebSocket) => {
 
         switch (message.type) {
             case "place":
-              const side = message.side;
-              if (side !== "buy" && side !== "sell") {
-                  throw new Error("Invalid side");
-              }
-
               console.log("Placing order: ", message);
               const requesterOrders = getOrCreateClientOrders(message.clientId);
 
-              // handle order placement validation here too to avoid incorrect orders even being sent to book
+              // Pre Book Place Taker Order
+              let pre;
+              try {
+                const { rows } = await pool.query(
+                  "select * from trade_or_tighten.place_taker_order($1,$2,$3,$4,$5,$6)",
+                  [
+                    message.clientId, 
+                    message.clientOrderId, 
+                    message.seq, 
+                    message.side, 
+                    message.price, 
+                    message.qty
+                  ]
+                );
+                pre = rows[0];
+                if (!pre) throw new Error("place_taker_order returned no rows");
+              } catch (e) {
+                sendToClient(message.clientId, { type: "place_rejected", reason: String(e) });
+                break;
+              }
+
+              // Check if the order has already been submitted to the engine
+              const submitKey = `${message.clientId}:${message.seq}`;
+              if (submittedToEngine.has(submitKey)) {
+                sendToClient(message.clientId, {
+                  type: "place_duplicate_ignored",
+                  clientId: message.clientId,
+                  seq: message.seq,
+                  clientOrderId: message.clientOrderId,
+                  dbOrderId: pre.db_order_id,
+                });
+                break;
+              }
+              submittedToEngine.add(submitKey);
+
+              // Submit order to the engine
               const res = await bridge.request({
                   op: "place",
                   clientId: message.clientId,
@@ -79,6 +110,7 @@ wss.on("connection", (ws: WsWebSocket) => {
                   qty: message.qty,
               });
 
+              // Handle engine response
               if (!res.execution_status) {
                 sendToClient(message.clientId, {
                   type: "place_rejected",
@@ -88,12 +120,38 @@ wss.on("connection", (ws: WsWebSocket) => {
                 break;
               }
 
-              // Taker comes from the incoming place request.
-              let takerCurrentQty = message.qty;
+              let takerPriceDelta = 0;
+              let takerAsset1Delta = 0;
+              
               for (const trade of res.trades) {
-                takerCurrentQty -= trade.qty;
+                takerPriceDelta += trade.price * trade.qty;
+                takerAsset1Delta += trade.qty;
               }
-              takerCurrentQty = Math.max(0, takerCurrentQty);
+
+              let takerCurrentQty = Math.max(0, message.qty - takerAsset1Delta);
+              let takerStatus = deriveOrderStatus(message.qty, takerCurrentQty);
+              
+              let post;
+              try {
+                const { rows } = await pool.query(
+                  "select * from trade_or_tighten.update_taker_order($1,$2,$3,$4,$5,$6,$7,$8)",
+                  [
+                    message.clientId, 
+                    message.clientOrderId, 
+                    message.seq, 
+                    res.orderId, 
+                    takerStatus, 
+                    takerCurrentQty,
+                    takerPriceDelta,
+                    takerAsset1Delta
+                  ]
+                );
+                post = rows[0];
+                if (!post) throw new Error("update_taker_order returned no rows");
+              } catch (e) {
+                sendToClient(message.clientId, { type: "update_taker_order_rejected", reason: String(e) });
+                break;
+              }
 
               requesterOrders.set(Number(res.orderId), {
                 orderId: Number(res.orderId),
@@ -104,29 +162,46 @@ wss.on("connection", (ws: WsWebSocket) => {
                 status: deriveOrderStatus(message.qty, takerCurrentQty),
               });
 
+
+
+
               // Maker updates come from trades returned by this placement.
               const impactedClients = new Set<string>([message.clientId]);
+
               for (const trade of res.trades) {
+                console.log("Processing trade: ", trade);
                 const makerClientId = trade.maker_client_id;
-                const makerOrders = clientOrderStates.get(makerClientId);
-                if (!makerOrders) {
-                  console.warn("Missing maker client state for trade", trade);
-                  continue;
-                }
-
                 const makerOrderId = Number(trade.maker_order_id);
-                const makerOrderState = makerOrders.get(makerOrderId);
-                if (!makerOrderState) {
-                  console.warn("Missing maker order state for trade", trade);
-                  continue;
+
+                let postMaker;
+                try {
+                  const { rows } = await pool.query(
+                    "select * from trade_or_tighten.update_maker_order($1,$2,$3,$4)",
+                    [
+                      makerClientId, 
+                      makerOrderId, 
+                      trade.price,
+                      trade.qty
+                    ]
+                  );
+                  postMaker = rows[0];
+                  if (!postMaker) throw new Error("update_maker_order returned no rows");
+                  
+                } catch (e) {
+                  sendToClient(makerClientId, { type: "update_maker_order_rejected", reason: String(e) });
+                  break;
                 }
 
-                const nextQty = Math.max(0, makerOrderState.currentQty - trade.qty);
+                const makerOrders = getOrCreateClientOrders(makerClientId);
                 makerOrders.set(makerOrderId, {
-                ...makerOrderState,
-                currentQty: nextQty,
-                status: deriveOrderStatus(makerOrderState.originalQty, nextQty),
+                  orderId: makerOrderId,
+                  side: postMaker.side as "buy" | "sell",
+                  price: Number(postMaker.price),
+                  originalQty: Number(postMaker.original_qty),
+                  currentQty: Number(postMaker.current_qty),
+                  status: postMaker.status as OrderState["status"],
                 });
+
                 impactedClients.add(makerClientId);
               }
 
