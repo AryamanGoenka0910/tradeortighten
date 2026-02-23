@@ -1,7 +1,7 @@
 import { WebSocketServer } from "ws";
 import type { WebSocket as WsWebSocket } from "ws";
-import { EngineBridge } from "./bridge_engine.js";
-import { pool } from "./src/db.js";
+import { EngineBridge } from "./order_book_engine/bridge_engine.js";
+import { pool } from "./db.js";
 
 const wss = new WebSocketServer({ port: 8080 });
 const clientSockets = new Map<string, WsWebSocket>();

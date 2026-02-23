@@ -4,17 +4,15 @@ import readline from "node:readline";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-import type { EngineRequest, EngineResponse, EngineTrade } from "./types.js";
+import type { EngineRequest, EngineResponse, EngineTrade } from "./engine_types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const enginePath = path.resolve(__dirname, "../OrderBook/build/OrderBook");
+const enginePath = path.resolve(__dirname, "../../../OrderBook/build/OrderBook");
 
 export class EngineBridge {
-        private child = spawn(enginePath, [], {
-        stdio: ["pipe", "pipe", "pipe"],
-        });
 
+    private child = spawn(enginePath, [], { stdio: ["pipe", "pipe", "pipe"] });
     private pending = new Map<string, { resolve: (v: EngineResponse) => void; reject: (e: Error) => void }>();
     private nextId = 1;
 
@@ -42,11 +40,10 @@ export class EngineBridge {
 
     request(
         payload: Omit<EngineRequest, "reqId">,
-        timeoutMs = 2000): 
-    Promise<EngineResponse> {
+        timeoutMs = 2000
+    ): Promise<EngineResponse> {
 
         console.log("Requesting engine: ", payload);
-
         const reqId = String(this.nextId++);
         const req: EngineRequest = { reqId, op: payload.op as "place" | "cancel" | "modify", ...payload };
 
