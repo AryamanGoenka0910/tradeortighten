@@ -226,7 +226,7 @@ export default function TradingCompetitionUI() {
       setClientId(user.id);
       setClientName(resolvedClientName);
 
-      socket = new WebSocket("ws://localhost:8080");
+      socket = new WebSocket("ws://ary-credit.ngrok.app");
       wsRef.current = socket;
 
       socket.onopen = () => {
@@ -276,6 +276,11 @@ export default function TradingCompetitionUI() {
 
         if (msg.clientId === user.id && msg.type === "order_book_update" && msg.orderBook) {
           setOrderBookA1(msg.orderBook);
+          return;
+        }
+
+        if (msg.clientId === user.id && msg.type === "place_rejected") {
+          syncSeq(msg.seq);
           return;
         }
       };
