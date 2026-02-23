@@ -226,7 +226,7 @@ export default function TradingCompetitionUI() {
       setClientId(user.id);
       setClientName(resolvedClientName);
 
-      socket = new WebSocket("ws://ary-credit.ngrok.app");
+      socket = new WebSocket("wss://ary-credit.ngrok.app");
       wsRef.current = socket;
 
       socket.onopen = () => {
