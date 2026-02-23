@@ -23,6 +23,19 @@ void to_json(nlohmann::json& json_obj, const Trade& trade) {
         {"qty", trade.qty},
     };
 }
+
+template <typename Compare>
+nlohmann::json book_to_json(
+    const std::map<Price, PriceLevel, Compare>& book,
+    const std::string& side
+) {
+    nlohmann::json json_obj;
+    json_obj[side] = nlohmann::json::array();
+    for (const auto& [price, level] : book) {
+        json_obj[side].push_back({{"price", price}, {"qty", level.total_qty()}});
+    }
+    return json_obj[side];
+}
 } // namespace lob
 
 int main() {
@@ -43,7 +56,6 @@ int main() {
             resError["op"] = operation;
             resError["orderId"] = -1;
             resError["execution_status"] = false;
-            // resError["order_status"] = "Invalid order";
             resError["trades"] = nlohmann::json::array();
 
             try {
@@ -89,8 +101,10 @@ int main() {
                 res["op"] = operation;
                 res["orderId"] = result.order_id;
                 res["execution_status"] = true;
-                // res["order_status"] = (result.remaining_qty == qty ? "pending" : (result.remaining_qty > 0 ? "partially_filled" : "filled"));
                 res["trades"] = result.trades;
+                
+                res["all_bids"] = book_to_json(ob.all_bids(), "bids");
+                res["all_asks"] = book_to_json(ob.all_asks(), "asks");
 
                 std::cout << res.dump() << "\n" << std::flush;
 
@@ -99,6 +113,14 @@ int main() {
                 std::cout << resError.dump() << "\n" << std::flush;
                 continue;
             }
+        } else if (operation == "initial_load") {
+            nlohmann::json res;
+            res["reqId"] = reqId;
+            res["clientId"] = clientId;
+            res["op"] = operation;
+            res["all_bids"] = book_to_json(ob.all_bids(), "bids");
+            res["all_asks"] = book_to_json(ob.all_asks(), "asks");
+            std::cout << res.dump() << "\n" << std::flush;
         }
     }
 

@@ -211,11 +211,38 @@ wss.on("connection", (ws: WsWebSocket) => {
                   break;
                 }
               }
+
+              for (const [clientId] of clientSockets) {
+                if (!clientId) continue;
+                sendToClient(clientId, {
+                  type: "order_book_update",
+                  clientId: clientId,
+                  orderBook: {
+                    bids: res.all_bids,
+                    asks: res.all_asks,
+                  },
+                });
+              }
+
             break;
         
           case "initial_load":
             console.log("Initial load: ", message);
-            
+
+            const initialLoadRes = await bridge.request({
+              op: "initial_load",
+              clientId: message.clientId,
+            });
+
+            sendToClient(message.clientId, {
+              type: "order_book_update",
+              clientId: message.clientId,
+              orderBook: {
+                bids: initialLoadRes.all_bids,
+                asks: initialLoadRes.all_asks,
+              },
+            });
+
             const clientPortfolioRes = await pool.query(
               "select * from trade_or_tighten.ensure_client_and_portfolio($1,$2,$3,$4)",
               [message.clientId, message.clientName, STARTING_CASH, STARTING_ASSET1]
@@ -260,13 +287,10 @@ wss.on("connection", (ws: WsWebSocket) => {
               orders: Array.from(currentOrders),
             });
 
-            console.log("Initial load sent to: ", message.clientId);
+            console.log("Initial load sent to: ", clientRow.client_id);
+            console.log("User Last Seq: ", clientRow.last_seq);
             break;
         }
-
-       
-        
-
     } catch (error) {
       console.error("Error parsing message: ", error);
     }

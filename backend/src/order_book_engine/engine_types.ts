@@ -22,4 +22,6 @@ export type EngineResponse = {
     order_status: "Invalid order" | "pending" | "partially_filled" | "filled";
     remainingQty: number;
     trades: EngineTrade[];
+    all_bids: { price: number; qty: number }[];
+    all_asks: { price: number; qty: number }[];
   };

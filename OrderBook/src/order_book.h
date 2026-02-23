@@ -45,6 +45,14 @@ namespace lob {
                 Qty new_qty
             );
 
+            const auto& all_bids() const{
+                return bids_;
+            };
+            
+            const auto& all_asks() const{
+                return asks_;
+            };
+
         private:
             std::unordered_map<OrderId, Order> order_map;
             using BidBook = std::map<Price, PriceLevel, std::greater<Price>>;
