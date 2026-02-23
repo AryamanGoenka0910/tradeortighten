@@ -126,10 +126,12 @@ export default function TradingCompetitionUI() {
   const wsRef = useRef(null);
   const seqRef = useRef(0);
 
+  const [orderBookA1, setOrderBookA1] = useState({ bids: [], asks: [] });
+  
+
   const mapServerOrderToUi = (order) => {
     const qty = Number(order.originalQty ?? 0);
     const currentQty = Number(order.currentQty ?? 0);
-    const filled = Math.max(0, qty - currentQty);
     const serverStatus = String(order.status ?? "");
     const status =
       serverStatus === "filled"
@@ -144,11 +146,10 @@ export default function TradingCompetitionUI() {
       id: `ORD-${order.orderId}`,
       ticker: "ALPHA",
       side: order.side === "buy" ? "BUY" : "SELL",
-      type: "LIMIT",
       price: Number(order.price),
       remainingQty: currentQty,
       status,
-      qty: currentQty,
+      qty: qty,
     };
   };
 
@@ -270,6 +271,11 @@ export default function TradingCompetitionUI() {
         if (msg.clientId === user.id && msg.type === "place_duplicate_ignored" && msg.order) {
           syncSeq(msg.seq);
           applyOrderDelta(msg.order);
+          return;
+        }
+
+        if (msg.clientId === user.id && msg.type === "order_book_update" && msg.orderBook) {
+          setOrderBookA1(msg.orderBook);
           return;
         }
       };
@@ -423,10 +429,10 @@ export default function TradingCompetitionUI() {
         gridTemplateRows: "repeat(2,minmax(0,1fr))",
         gap: "6px", padding: "6px", minHeight: 0,
       }}>
-        <SecurityQuadrant security={SECURITIES[0]} onOrder={handleOrder} />
-        <SecurityQuadrant security={SECURITIES[1]} onOrder={handleOrder} />
-        <SecurityQuadrant security={SECURITIES[2]} onOrder={handleOrder} />
-        <SecurityQuadrant security={SECURITIES[3]} onOrder={handleOrder} />
+        <SecurityQuadrant security={SECURITIES[0]} orderBook={orderBookA1} onOrder={handleOrder} />
+        <SecurityQuadrant security={SECURITIES[1]} orderBook={orderBookA1} onOrder={handleOrder} />
+        <SecurityQuadrant security={SECURITIES[2]} orderBook={orderBookA1} onOrder={handleOrder} />
+        <SecurityQuadrant security={SECURITIES[3]} orderBook={orderBookA1} onOrder={handleOrder} />
         <div style={{ gridColumn: "3", gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "6px", minHeight: 0 }}>
           <PortfolioPanel portfolio={portfolio} orders={openOrders} />
           <div style={{ flex: 1, minHeight: 0 }}>

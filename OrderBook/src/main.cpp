@@ -31,6 +31,9 @@ nlohmann::json book_to_json(
 ) {
     nlohmann::json json_obj;
     json_obj[side] = nlohmann::json::array();
+    if (book.empty()) {
+        return json_obj[side];
+    }
     for (const auto& [price, level] : book) {
         json_obj[side].push_back({{"price", price}, {"qty", level.total_qty()}});
     }

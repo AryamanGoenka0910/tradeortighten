@@ -50,7 +50,7 @@ function OrderBook({ bids, asks }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-      <Row items={asks} isBid={false} />
+      <Row items={asks.slice().reverse()} isBid={false} />
       <div style={{ height: "1px", background: "#1a1f2e" }} />
       <Row items={bids} isBid={true} />
     </div>
@@ -133,7 +133,7 @@ function InlineOrderEntry({ security, onSubmit }) {
   );
 }
 
-export default function SecurityQuadrant({ security, onOrder }) {
+export default function SecurityQuadrant({ security, orderBook, onOrder }) {
   const isPos = security.change >= 0;
 
   return (
@@ -161,7 +161,7 @@ export default function SecurityQuadrant({ security, onOrder }) {
       <SparkChart data={security.history} color={security.color} height={74} />
 
       <div style={{ minHeight: 0, overflow: "auto" }}>
-        <OrderBook bids={security.bids} asks={security.asks} />
+        <OrderBook bids={orderBook.bids} asks={orderBook.asks.reverse()} />
       </div>
 
       <div style={{ marginTop: "auto" }}>
