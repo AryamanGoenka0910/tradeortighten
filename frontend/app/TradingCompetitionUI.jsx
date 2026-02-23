@@ -89,11 +89,6 @@ const INITIAL_MESSAGES = [
   { id: 2, title: "Market Intel: Alpha Index", body: "ALPHA has shown strong momentum. Rumor: a catalyst event may hit within 30 min.", time: "10:15 AM", read: false },
 ];
 
-const MOCK_POSITIONS = [
-  { ticker: "ALPHA", side: "BUY", qty: 25, entryPrice: 50.2, currentPrice: 52.3 },
-  { ticker: "GAMMA", side: "SELL", qty: 10, entryPrice: 80.0, currentPrice: 78.1 },
-];
-
 // --- Toast ---
 function Toast({ message, onDismiss }) {
   useEffect(() => { const t = setTimeout(onDismiss, 5000); return () => clearTimeout(t); }, [onDismiss]);
@@ -122,7 +117,6 @@ export default function TradingCompetitionUI() {
   const [messages, setMessages] = useState(INITIAL_MESSAGES);
   const [toast, setToast] = useState(null);
   const [clock, setClock] = useState("01:23:47");
-  const [positions] = useState(MOCK_POSITIONS);
   const [openOrders, setOpenOrders] = useState([]);
   const [portfolio, setPortfolio] = useState(null);
   const [clientId, setClientId] = useState(null);
@@ -130,6 +124,33 @@ export default function TradingCompetitionUI() {
   const [authError, setAuthError] = useState(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const wsRef = useRef(null);
+  const seqRef = useRef(0);
+
+  const mapServerOrderToUi = (order) => {
+    const qty = Number(order.originalQty ?? 0);
+    const currentQty = Number(order.currentQty ?? 0);
+    const filled = Math.max(0, qty - currentQty);
+    const serverStatus = String(order.status ?? "");
+    const status =
+      serverStatus === "filled"
+        ? "FILLED"
+        : serverStatus === "partially_filled"
+          ? "PARTIAL"
+          : serverStatus === "cancelled"
+            ? "CANCELLED"
+            : "RESTING";
+
+    return {
+      id: `ORD-${order.orderId}`,
+      ticker: "ALPHA",
+      side: order.side === "buy" ? "BUY" : "SELL",
+      type: "LIMIT",
+      price: Number(order.price),
+      remainingQty: currentQty,
+      status,
+      qty: currentQty,
+    };
+  };
 
   useEffect(() => {
     let s = 1 * 3600 + 23 * 60 + 47;
@@ -207,27 +228,21 @@ export default function TradingCompetitionUI() {
         if (msg.type === "initial_load_snapshot" && msg.clientId === user.id && msg.portfolio) {
           if (msg.portfolio) {
             setPortfolio(msg.portfolio);
-          } 
+          }
+          if (msg.client?.lastSeq != null) {
+            seqRef.current = Number(msg.client.lastSeq) || 0;
+          }
           if  (Array.isArray(msg.orders)) {
-            const mappedOrders = msg.orders.map((order) => {
-              const qty = Number(order.originalQty ?? 0);
-              const currentQty = Number(order.currentQty ?? 0);
-              const filled = Math.max(0, qty - currentQty);
-
-              return {
-                id: `ORD-${order.orderId}`,
-                ticker: "ALPHA",
-                side: order.side === "buy" ? "BUY" : "SELL",
-                type: "LIMIT",
-                price: Number(order.price),
-                qty,
-                filled,
-                status: order.status === "partially_filled" ? "PARTIAL" : "OPEN",
-              };
-            });
+            const mappedOrders = msg.orders.map(mapServerOrderToUi);
             setOpenOrders(mappedOrders);
             return;
           }
+        }
+
+        if (msg.type === "order_state_snapshot" && msg.clientId === user.id && Array.isArray(msg.orders)) {
+          const mappedOrders = msg.orders.map(mapServerOrderToUi);
+          setOpenOrders(mappedOrders);
+          return;
         }
       };
 
@@ -248,9 +263,28 @@ export default function TradingCompetitionUI() {
   const markRead = (id) => setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, read: true } : m)));
   const cancelOrder = (id) => setOpenOrders((prev) => prev.filter((o) => o.id !== id));
   const handleOrder = (order) => {
-    const newOrd = { id: `ORD-${Date.now()}`, ticker: order.ticker, side: order.side === "BID" ? "BUY" : "SELL", type: "LIMIT", price: order.price, qty: order.qty, filled: 0, status: "OPEN" };
-    setOpenOrders((prev) => [newOrd, ...prev]);
+    const socket = wsRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN || !clientId) return;
+
+    const nextSeq = seqRef.current + 1;
+    seqRef.current = nextSeq;
+
+    const payload = {
+      type: "place",
+      clientId,
+      seq: nextSeq,
+      clientOrderId:
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `client-${Date.now()}-${Math.floor(Math.random() * 1000000)}`,
+      side: order.side === "BID" ? "buy" : "sell",
+      price: Math.round(Number(order.price)),
+      qty: Math.round(Number(order.qty)),
+    };
+
+    socket.send(JSON.stringify(payload));
   };
+  
   const handleSignOut = async () => {
     setIsSigningOut(true);
     if (supabase) {
@@ -260,7 +294,6 @@ export default function TradingCompetitionUI() {
   };
 
   const unreadCount = messages.filter((m) => !m.read).length;
-  const uPnl = positions.reduce((s, p) => s + (p.side === "BUY" ? p.currentPrice - p.entryPrice : p.entryPrice - p.currentPrice) * p.qty, 0);
 
   if (authError) {
     return (
@@ -330,12 +363,6 @@ export default function TradingCompetitionUI() {
             <span style={{ fontSize: "8px", color: "#4b5563" }}>TIME</span>
             <span style={{ fontSize: "14px", fontWeight: 800, color: "#e5e7eb", fontFamily: "'JetBrains Mono',monospace", letterSpacing: "1px" }}>{clock}</span>
           </div>
-          <div style={{ padding: "5px 12px", borderRadius: "6px", background: "#0f1219", border: "1px solid #1a1f2e" }}>
-            <span style={{ fontSize: "8px", color: "#4b5563" }}>P&L </span>
-            <span style={{ fontSize: "13px", fontWeight: 800, color: uPnl >= 0 ? "#00E5A0" : "#FF6C6C", fontFamily: "'JetBrains Mono',monospace" }}>
-              {uPnl >= 0 ? "+" : ""}${Math.abs(uPnl).toFixed(0)}
-            </span>
-          </div>
           <button onClick={() => { setShowInbox(!showInbox); setShowLeaderboard(false); }} style={{
             padding: "6px 10px", borderRadius: "6px", border: "1px solid #1a1f2e", cursor: "pointer",
             background: showInbox ? "#151a27" : "#0f1219", color: "#e5e7eb", fontSize: "12px",
@@ -364,16 +391,20 @@ export default function TradingCompetitionUI() {
       {/* 3x2 Grid */}
       <div style={{
         flex: 1, display: "grid",
-        gridTemplateColumns: "minmax(0,0.75fr) minmax(0,0.75fr) minmax(0,1.5fr)",
-        gridTemplateRows: "minmax(0,1fr) minmax(0,1fr)",
+        gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+        gridTemplateRows: "repeat(2,minmax(0,1fr))",
         gap: "6px", padding: "6px", minHeight: 0,
       }}>
         <SecurityQuadrant security={SECURITIES[0]} onOrder={handleOrder} />
         <SecurityQuadrant security={SECURITIES[1]} onOrder={handleOrder} />
-        <PortfolioPanel positions={positions} portfolio={portfolio} />
         <SecurityQuadrant security={SECURITIES[2]} onOrder={handleOrder} />
         <SecurityQuadrant security={SECURITIES[3]} onOrder={handleOrder} />
-        <OpenOrdersPanel orders={openOrders} onCancel={cancelOrder} />
+        <div style={{ gridColumn: "3", gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "6px", minHeight: 0 }}>
+          <PortfolioPanel portfolio={portfolio} orders={openOrders} />
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <OpenOrdersPanel orders={openOrders} onCancel={cancelOrder} />
+          </div>
+        </div>
       </div>
 
       {showLeaderboard && <LeaderboardPanel onClose={() => setShowLeaderboard(false)} leaderboard={LEADERBOARD} />}
