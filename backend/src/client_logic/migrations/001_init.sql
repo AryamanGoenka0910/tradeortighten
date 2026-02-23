@@ -2,6 +2,7 @@ create schema if not exists trade_or_tighten;
 
 create table if not exists trade_or_tighten.clients (
   client_id uuid primary key,
+  client_name text not null,
   last_seq int8 not null default 0
 );
 

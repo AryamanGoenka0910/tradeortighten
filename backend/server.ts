@@ -8,6 +8,9 @@ const clientSockets = new Map<string, WsWebSocket>();
 const clientOrderStates = new Map<string, Map<number, OrderState>>();
 const submittedToEngine = new Set<string>(); // clientId:seq
 
+const STARTING_CASH = 100000;
+const STARTING_ASSET1 = 1000;
+
 type OrderState = {
   orderId: number;
   side: "buy" | "sell";
@@ -49,6 +52,7 @@ type ClientMessage =
     | { clientId: string, type: "place", seq: number, clientOrderId: string, side: "buy" | "sell", price: number, qty: number }
     | { clientId: string, type: "cancel", orderId: number }
     | { clientId: string, type: "modify", orderId: number, price: number, qty: number }
+    | { clientId: string, type: "initial_load", clientName: string, lastSeq: number }
 
 wss.on("connection", (ws: WsWebSocket) => {
   console.log("Client connected");
@@ -62,7 +66,7 @@ wss.on("connection", (ws: WsWebSocket) => {
         clientSockets.set(message.clientId, ws);
 
         switch (message.type) {
-            case "place":
+          case "place":
               console.log("Placing order: ", message);
               const requesterOrders = getOrCreateClientOrders(message.clientId);
 
@@ -216,9 +220,60 @@ wss.on("connection", (ws: WsWebSocket) => {
                 });
               }
             break;
+        
+          case "initial_load":
+            console.log("Initial load: ", message);
+            
+            const clientPortfolioRes = await pool.query(
+              "select * from trade_or_tighten.ensure_client_and_portfolio($1,$2,$3,$4)",
+              [message.clientId, message.clientName, STARTING_CASH, STARTING_ASSET1]
+            );
+            const clientRow = clientPortfolioRes.rows[0];
+
+            const openOrdersRes = await pool.query(
+              "select * from trade_or_tighten.get_client_open_orders($1)",
+              [message.clientId]
+            );
+
+            const currentOrders: OrderState[] = [];
+            for (const row of openOrdersRes.rows) {
+              currentOrders.push({
+                orderId: Number(row.order_id),
+                side: row.side as "buy" | "sell",
+                price: Number(row.price),
+                originalQty: Number(row.original_qty),
+                currentQty: Number(row.current_qty),
+                status: row.status as OrderState["status"],
+              });
+            }
+
+            sendToClient(message.clientId, {
+              type: "initial_load_snapshot",
+              clientId: message.clientId,
+              portfolio: {
+                cashAvailable: Number(clientRow.cash_available),
+                cashReserved: Number(clientRow.cash_reserved),
+                asset1Available: Number(clientRow.asset1_available),
+                asset1Reserved: Number(clientRow.asset1_reserved),
+                asset2Available: Number(clientRow.asset2_available),
+                asset2Reserved: Number(clientRow.asset2_reserved),
+                asset3Available: Number(clientRow.asset3_available),
+                asset3Reserved: Number(clientRow.asset3_reserved),
+                asset4Available: Number(clientRow.asset4_available),
+                asset4Reserved: Number(clientRow.asset4_reserved),
+              },
+              client: {
+                clientName: clientRow.client_name,
+                lastSeq: Number(clientRow.last_seq),
+              },
+              orders: Array.from(currentOrders),
+            });
+
+            console.log("Initial load sent to: ", message.clientId);
+            break;
         }
 
-        // 3 Send Response
+       
         
 
     } catch (error) {

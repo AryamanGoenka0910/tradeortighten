@@ -1,5 +1,7 @@
-export default function PortfolioPanel({ positions }) {
-  const cash = 48749.20;
+export default function PortfolioPanel({ positions, portfolio }) {
+  const cash = Number(portfolio?.cashAvailable ?? 0);
+  const cashReserved = Number(portfolio?.cashReserved ?? 0);
+  const buyingPower = Math.max(0, cash - cashReserved);
   const posVal = positions.reduce((s, p) => s + p.qty * p.currentPrice * (p.side === "SELL" ? -1 : 1), 0);
   const uPnl = positions.reduce((s, p) => {
     const d = p.side === "BUY" ? p.currentPrice - p.entryPrice : p.entryPrice - p.currentPrice;
@@ -19,7 +21,7 @@ export default function PortfolioPanel({ positions }) {
 
       {[
         { label: "Cash Balance", value: `$${cash.toLocaleString("en-US", { minimumFractionDigits: 2 })}`, color: "#e5e7eb" },
-        { label: "Buying Power", value: `$${(cash * 2).toLocaleString("en-US", { minimumFractionDigits: 2 })}`, color: "#e5e7eb" },
+        { label: "Buying Power", value: `$${buyingPower.toLocaleString("en-US", { minimumFractionDigits: 2 })}`, color: "#e5e7eb" },
       ].map((r, i) => (
         <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
           <span style={{ fontSize: "10px", color: "#4b5563" }}>{r.label}</span>

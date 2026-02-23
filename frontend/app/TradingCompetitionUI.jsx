@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import SecurityQuadrant from "./components/SecurityQuadrant";
@@ -94,12 +94,6 @@ const MOCK_POSITIONS = [
   { ticker: "GAMMA", side: "SELL", qty: 10, entryPrice: 80.0, currentPrice: 78.1 },
 ];
 
-const MOCK_OPEN_ORDERS = [
-  { id: "ORD-001", ticker: "BETA", side: "BUY", type: "LIMIT", price: 33.5, qty: 50, filled: 0, status: "OPEN" },
-  { id: "ORD-002", ticker: "DELTA", side: "SELL", type: "LIMIT", price: 22.5, qty: 30, filled: 12, status: "PARTIAL" },
-  { id: "ORD-003", ticker: "ALPHA", side: "BUY", type: "LIMIT", price: 51.0, qty: 40, filled: 0, status: "OPEN" },
-];
-
 // --- Toast ---
 function Toast({ message, onDismiss }) {
   useEffect(() => { const t = setTimeout(onDismiss, 5000); return () => clearTimeout(t); }, [onDismiss]);
@@ -129,8 +123,13 @@ export default function TradingCompetitionUI() {
   const [toast, setToast] = useState(null);
   const [clock, setClock] = useState("01:23:47");
   const [positions] = useState(MOCK_POSITIONS);
-  const [openOrders, setOpenOrders] = useState(MOCK_OPEN_ORDERS);
+  const [openOrders, setOpenOrders] = useState([]);
+  const [portfolio, setPortfolio] = useState(null);
+  const [clientId, setClientId] = useState(null);
+  const [clientName, setClientName] = useState(null);
+  const [authError, setAuthError] = useState(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const wsRef = useRef(null);
 
   useEffect(() => {
     let s = 1 * 3600 + 23 * 60 + 47;
@@ -150,6 +149,102 @@ export default function TradingCompetitionUI() {
     return () => clearTimeout(t);
   }, []);
 
+  useEffect(() => {
+    let socket = null;
+    let isMounted = true;
+
+    const boot = async () => {
+      if (!supabase) {
+        setAuthError("Supabase is not configured.");
+        return;
+      }
+
+      const { data, error } = await supabase.auth.getUser();
+      if (error || !data?.user) {
+        setAuthError("Not logged in. Please sign in.");
+        return;
+      }
+
+      console.log("User data: ", data);
+      const user = data.user;
+      const resolvedClientName =
+        user.user_metadata?.first_name ??
+        " " + user.user_metadata?.last_name ??
+        null;
+
+      if (!resolvedClientName) {
+        setAuthError("Missing user name. Please complete profile and sign in.");
+        return;
+      }
+
+      if (!isMounted) return;
+
+      setClientId(user.id);
+      setClientName(resolvedClientName);
+
+      socket = new WebSocket("ws://localhost:8080");
+      wsRef.current = socket;
+
+      socket.onopen = () => {
+        socket.send(
+          JSON.stringify({
+            type: "initial_load",
+            clientId: user.id,
+            clientName: resolvedClientName,
+            lastSeq: 0,
+          }),
+        );
+      };
+
+      socket.onmessage = (event) => {
+        let msg;
+        try {
+          msg = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+
+        if (msg.type === "initial_load_snapshot" && msg.clientId === user.id && msg.portfolio) {
+          if (msg.portfolio) {
+            setPortfolio(msg.portfolio);
+          } 
+          if  (Array.isArray(msg.orders)) {
+            const mappedOrders = msg.orders.map((order) => {
+              const qty = Number(order.originalQty ?? 0);
+              const currentQty = Number(order.currentQty ?? 0);
+              const filled = Math.max(0, qty - currentQty);
+
+              return {
+                id: `ORD-${order.orderId}`,
+                ticker: "ALPHA",
+                side: order.side === "buy" ? "BUY" : "SELL",
+                type: "LIMIT",
+                price: Number(order.price),
+                qty,
+                filled,
+                status: order.status === "partially_filled" ? "PARTIAL" : "OPEN",
+              };
+            });
+            setOpenOrders(mappedOrders);
+            return;
+          }
+        }
+      };
+
+      socket.onerror = () => {
+        setAuthError("WebSocket connection failed.");
+      };
+    };
+
+    boot();
+
+    return () => {
+      isMounted = false;
+      if (socket) socket.close();
+      wsRef.current = null;
+    };
+  }, []);
+
   const markRead = (id) => setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, read: true } : m)));
   const cancelOrder = (id) => setOpenOrders((prev) => prev.filter((o) => o.id !== id));
   const handleOrder = (order) => {
@@ -166,6 +261,25 @@ export default function TradingCompetitionUI() {
 
   const unreadCount = messages.filter((m) => !m.read).length;
   const uPnl = positions.reduce((s, p) => s + (p.side === "BUY" ? p.currentPrice - p.entryPrice : p.entryPrice - p.currentPrice) * p.qty, 0);
+
+  if (authError) {
+    return (
+      <div style={{ width: "100vw", height: "100vh", background: "#080a12", color: "#e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk',-apple-system,sans-serif" }}>
+        <div style={{ border: "1px solid #3b1820", background: "#140b10", borderRadius: "10px", padding: "16px 18px", maxWidth: "520px" }}>
+          <div style={{ fontSize: "14px", fontWeight: 700, color: "#ff8ea1", marginBottom: "8px" }}>Authentication Error</div>
+          <div style={{ fontSize: "12px", color: "#f3c5cf" }}>{authError}</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!clientId || !clientName) {
+    return (
+      <div style={{ width: "100vw", height: "100vh", background: "#080a12", color: "#e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk',-apple-system,sans-serif" }}>
+        Loading trader session...
+      </div>
+    );
+  }
 
   return (
     <div style={{ width: "100vw", height: "100vh", background: "#080a12", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: "'Space Grotesk',-apple-system,sans-serif" }}>
@@ -256,7 +370,7 @@ export default function TradingCompetitionUI() {
       }}>
         <SecurityQuadrant security={SECURITIES[0]} onOrder={handleOrder} />
         <SecurityQuadrant security={SECURITIES[1]} onOrder={handleOrder} />
-        <PortfolioPanel positions={positions} />
+        <PortfolioPanel positions={positions} portfolio={portfolio} />
         <SecurityQuadrant security={SECURITIES[2]} onOrder={handleOrder} />
         <SecurityQuadrant security={SECURITIES[3]} onOrder={handleOrder} />
         <OpenOrdersPanel orders={openOrders} onCancel={cancelOrder} />
