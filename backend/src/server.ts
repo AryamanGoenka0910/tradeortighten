@@ -5,7 +5,6 @@ import { pool } from "./db.js";
 
 const wss = new WebSocketServer({ port: 8080 });
 const clientSockets = new Map<string, WsWebSocket>();
-const clientOrderStates = new Map<string, Map<number, OrderState>>();
 const submittedToEngine = new Set<string>(); // clientId:seq
 
 const STARTING_CASH = 100000;
@@ -27,15 +26,6 @@ const deriveOrderStatus = (
   if (currentQty <= 0) return "filled";
   if (currentQty >= originalQty) return "pending";
   return "partially_filled";
-};
-
-const getOrCreateClientOrders = (clientId: string): Map<number, OrderState> => {
-  let orders = clientOrderStates.get(clientId);
-  if (!orders) {
-    orders = new Map<number, OrderState>();
-    clientOrderStates.set(clientId, orders);
-  }
-  return orders;
 };
 
 const sendToClient = (clientId: string, payload: unknown): void => {
@@ -60,7 +50,6 @@ wss.on("connection", (ws: WsWebSocket) => {
   ws.on("message", async (raw) => {
     try {
         // 1 Auth Check
-
         // 2 Parse Message + Validate
         const message = JSON.parse(raw.toString()) as ClientMessage;
         clientSockets.set(message.clientId, ws);
@@ -68,7 +57,6 @@ wss.on("connection", (ws: WsWebSocket) => {
         switch (message.type) {
           case "place":
               console.log("Placing order: ", message);
-              const requesterOrders = getOrCreateClientOrders(message.clientId);
 
               // Pre Book Place Taker Order
               let pre;
@@ -93,13 +81,22 @@ wss.on("connection", (ws: WsWebSocket) => {
 
               // Check if the order has already been submitted to the engine
               const submitKey = `${message.clientId}:${message.seq}`;
+              const order: OrderState = {
+                orderId: Number(pre.order_id),
+                side: pre.side as "buy" | "sell",
+                price: Number(pre.price),
+                originalQty: Number(pre.original_qty),
+                currentQty: Number(pre.current_qty),
+                status: pre.status as OrderState["status"],
+              };
+
               if (submittedToEngine.has(submitKey)) {
                 sendToClient(message.clientId, {
                   type: "place_duplicate_ignored",
                   clientId: message.clientId,
                   seq: message.seq,
                   clientOrderId: message.clientOrderId,
-                  dbOrderId: pre.db_order_id,
+                  order: order,
                 });
                 break;
               }
@@ -152,26 +149,28 @@ wss.on("connection", (ws: WsWebSocket) => {
                 );
                 post = rows[0];
                 if (!post) throw new Error("update_taker_order returned no rows");
+
+                const order: OrderState = {
+                  orderId: Number(post.order_id),
+                  side: post.side as "buy" | "sell",
+                  price: Number(post.price),
+                  originalQty: Number(post.original_qty),
+                  currentQty: takerCurrentQty,
+                  status: takerStatus,
+                };
+  
+                sendToClient(message.clientId, { 
+                  type: "order_update_snapshot",
+                  clientId: message.clientId,
+                  orderId: res.orderId,
+                  order: order
+                });
+
               } catch (e) {
                 sendToClient(message.clientId, { type: "update_taker_order_rejected", reason: String(e) });
                 break;
               }
-
-              requesterOrders.set(Number(res.orderId), {
-                orderId: Number(res.orderId),
-                side: message.side,
-                price: message.price,
-                originalQty: message.qty,
-                currentQty: takerCurrentQty,
-                status: deriveOrderStatus(message.qty, takerCurrentQty),
-              });
-
-
-
-
-              // Maker updates come from trades returned by this placement.
-              const impactedClients = new Set<string>([message.clientId]);
-
+            
               for (const trade of res.trades) {
                 console.log("Processing trade: ", trade);
                 const makerClientId = trade.maker_client_id;
@@ -190,34 +189,27 @@ wss.on("connection", (ws: WsWebSocket) => {
                   );
                   postMaker = rows[0];
                   if (!postMaker) throw new Error("update_maker_order returned no rows");
+
+                  const makerOrder: OrderState = {
+                    orderId: makerOrderId,
+                    side: postMaker.side as "buy" | "sell",
+                    price: Number(postMaker.price),
+                    originalQty: Number(postMaker.original_qty),
+                    currentQty: Number(postMaker.current_qty),
+                    status: postMaker.status as OrderState["status"],
+                  };
+  
+                  sendToClient(makerClientId, {
+                    type: "order_update_snapshot",
+                    clientId: makerClientId,
+                    orderId: makerOrderId,
+                    order: makerOrder,
+                  });
                   
                 } catch (e) {
                   sendToClient(makerClientId, { type: "update_maker_order_rejected", reason: String(e) });
                   break;
                 }
-
-                const makerOrders = getOrCreateClientOrders(makerClientId);
-                makerOrders.set(makerOrderId, {
-                  orderId: makerOrderId,
-                  side: postMaker.side as "buy" | "sell",
-                  price: Number(postMaker.price),
-                  originalQty: Number(postMaker.original_qty),
-                  currentQty: Number(postMaker.current_qty),
-                  status: postMaker.status as OrderState["status"],
-                });
-
-                impactedClients.add(makerClientId);
-              }
-
-              // Push state snapshots so UI can visualize live order changes.
-              for (const clientId of impactedClients) {
-                const orders = clientOrderStates.get(clientId);
-                if (!orders) continue;
-                sendToClient(clientId, {
-                  type: "order_state_snapshot",
-                  clientId,
-                  orders: Array.from(orders.values()),
-                });
               }
             break;
         
@@ -234,7 +226,6 @@ wss.on("connection", (ws: WsWebSocket) => {
               "select * from trade_or_tighten.get_client_open_orders($1)",
               [message.clientId]
             );
-
             const currentOrders: OrderState[] = [];
             for (const row of openOrdersRes.rows) {
               currentOrders.push({

@@ -2,7 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="${ENV_FILE:-$SCRIPT_DIR/.env}"
+BACKEND_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+ENV_FILE="${ENV_FILE:-$BACKEND_DIR/.env}"
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   cat <<'USAGE'
@@ -19,29 +20,54 @@ What it does:
 
 Environment overrides:
   - DATABASE_URL: Postgres connection string
+  - DATABAASE_URL: accepted as a compatibility alias for DATABASE_URL
   - ENV_FILE: path to the env file to read DATABASE_URL from (default: ./backend/.env)
 USAGE
   exit 0
 fi
 
-# Your backend `.env` contains non-env lines (a psql snippet), so we **do not** `source` it.
-# Instead, we extract DATABASE_URL safely from a line like:
-#   DATABASE_URL="postgres://..."
+# Compatibility alias: if DATABAASE_URL is set, use it.
+# If both are set, DATABAASE_URL intentionally wins.
+if [[ -n "${DATABAASE_URL:-}" ]]; then
+  DATABASE_URL="$DATABAASE_URL"
+fi
+
+# Read DATABASE_URL from env file when not already provided.
 if [[ -z "${DATABASE_URL:-}" ]]; then
   if [[ -f "$ENV_FILE" ]]; then
-    while IFS= read -r line; do
+    env_database_url=""
+    env_databaase_url=""
+
+    while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
+      line="${raw_line%$'\r'}"
+      # Trim leading whitespace so lines like "  DATABASE_URL=..." still parse.
+      line="${line#"${line%%[![:space:]]*}"}"
+
+      [[ -z "$line" || "${line:0:1}" == "#" ]] && continue
+
       case "$line" in
+        DATABAASE_URL=*|export\ DATABAASE_URL=*)
+          line="${line#export }"
+          value="${line#DATABAASE_URL=}"
+          value="${value#\"}"; value="${value%\"}"
+          value="${value#\'}"; value="${value%\'}"
+          env_databaase_url="$value"
+          ;;
         DATABASE_URL=*|export\ DATABASE_URL=*)
           line="${line#export }"
           value="${line#DATABASE_URL=}"
-          value="${value%$'\r'}"
           value="${value#\"}"; value="${value%\"}"
           value="${value#\'}"; value="${value%\'}"
-          DATABASE_URL="$value"
-          break
+          env_database_url="$value"
           ;;
       esac
     done < "$ENV_FILE"
+
+    if [[ -n "$env_databaase_url" ]]; then
+      DATABASE_URL="$env_databaase_url"
+    elif [[ -n "$env_database_url" ]]; then
+      DATABASE_URL="$env_database_url"
+    fi
   fi
 fi
 
@@ -55,7 +81,7 @@ if ! command -v psql >/dev/null 2>&1; then
   exit 1
 fi
 
-MIGRATIONS_DIR="$SCRIPT_DIR/src/client_logic/migrations"
+MIGRATIONS_DIR="$BACKEND_DIR/src/client_logic/migrations"
 if [[ ! -d "$MIGRATIONS_DIR" ]]; then
   echo "Migrations directory not found: $MIGRATIONS_DIR" >&2
   exit 1

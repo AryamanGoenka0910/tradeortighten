@@ -152,6 +152,28 @@ export default function TradingCompetitionUI() {
     };
   };
 
+  const applyOrderDelta = (serverOrder) => {
+    const mapped = mapServerOrderToUi(serverOrder);
+    const isTerminal = mapped.status === "FILLED" || mapped.status === "CANCELLED";
+  
+    setOpenOrders((prev) => {
+      const idx = prev.findIndex((o) => o.id === mapped.id);
+  
+      if (isTerminal) return idx === -1 ? prev : prev.filter((o) => o.id !== mapped.id);
+      if (idx === -1) return [...prev, mapped];
+  
+      const next = [...prev];
+      next[idx] = mapped;
+      return next;
+    });
+  };
+
+  const syncSeq = (serverSeq) => {
+    const n = Number(serverSeq);
+    if (!Number.isFinite(n)) return;
+    seqRef.current = Math.max(seqRef.current, n);
+  };
+
   useEffect(() => {
     let s = 1 * 3600 + 23 * 60 + 47;
     const iv = setInterval(() => {
@@ -225,12 +247,12 @@ export default function TradingCompetitionUI() {
           return;
         }
 
-        if (msg.type === "initial_load_snapshot" && msg.clientId === user.id && msg.portfolio) {
+        if (msg.clientId === user.id && msg.type === "initial_load_snapshot") {
           if (msg.portfolio) {
             setPortfolio(msg.portfolio);
           }
           if (msg.client?.lastSeq != null) {
-            seqRef.current = Number(msg.client.lastSeq) || 0;
+            syncSeq(msg.client.lastSeq);
           }
           if  (Array.isArray(msg.orders)) {
             const mappedOrders = msg.orders.map(mapServerOrderToUi);
@@ -239,9 +261,15 @@ export default function TradingCompetitionUI() {
           }
         }
 
-        if (msg.type === "order_state_snapshot" && msg.clientId === user.id && Array.isArray(msg.orders)) {
-          const mappedOrders = msg.orders.map(mapServerOrderToUi);
-          setOpenOrders(mappedOrders);
+        if (msg.clientId === user.id && msg.type === "order_update_snapshot" && msg.order) {
+          syncSeq(msg.seq);
+          applyOrderDelta(msg.order);
+          return;
+        }
+        
+        if (msg.clientId === user.id && msg.type === "place_duplicate_ignored" && msg.order) {
+          syncSeq(msg.seq);
+          applyOrderDelta(msg.order);
           return;
         }
       };
