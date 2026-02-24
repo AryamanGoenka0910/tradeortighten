@@ -150,15 +150,15 @@ export default function SecurityQuadrant({ security, orderBook, onOrder }) {
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
           <span style={{ fontSize: "15px", fontWeight: 800, color: "#e5e7eb", fontFamily: "'JetBrains Mono',monospace", letterSpacing: "-0.5px" }}>
-            {security.currentPrice.toFixed(1)}
+            {50}
           </span>
-          <span style={{ fontSize: "9px", fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: isPos ? "#00E5A0" : "#FF6C6C" }}>
+          {/* <span style={{ fontSize: "9px", fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: isPos ? "#00E5A0" : "#FF6C6C" }}>
             {isPos ? "+" : ""}{security.change.toFixed(1)}
-          </span>
+          </span> */}
         </div>
       </div>
 
-      <SparkChart data={security.history} color={security.color} height={74} />
+      {/* <SparkChart data={security.history} color={security.color} height={74} /> */}
 
       <div style={{ minHeight: 0, overflow: "auto" }}>
         <OrderBook bids={orderBook.bids} asks={orderBook.asks.reverse()} />
