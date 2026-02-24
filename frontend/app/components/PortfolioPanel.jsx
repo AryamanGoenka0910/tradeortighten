@@ -52,7 +52,7 @@ export default function PortfolioPanel({ portfolio, orders }) {
   }
 
   const portfolioValue = Object.values(securities).map((s) => (s.price * s.qty)).reduce((a, b) => a + b, 0);
-  const uPnl = (200000 - portfolioValue);
+  const uPnl = (150000 - portfolioValue);
 
 
   return (
