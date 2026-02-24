@@ -135,6 +135,13 @@ function InlineOrderEntry({ security, onSubmit }) {
 
 export default function SecurityQuadrant({ security, orderBook, onOrder }) {
   const isPos = security.change >= 0;
+  
+  const bids = orderBook?.bids ?? [];
+  const asks = orderBook?.asks ?? [];
+  const bestBid = bids.length ? bids[0].price : null;
+  const bestAsk = asks.length ? asks[asks.length - 1].price : null;
+  const currentPrice = bestBid != null && bestAsk != null ? (bestBid + bestAsk) / 2 : 50;
+
 
   return (
     <div style={{
@@ -150,7 +157,7 @@ export default function SecurityQuadrant({ security, orderBook, onOrder }) {
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
           <span style={{ fontSize: "15px", fontWeight: 800, color: "#e5e7eb", fontFamily: "'JetBrains Mono',monospace", letterSpacing: "-0.5px" }}>
-            {50}
+            {currentPrice}
           </span>
           {/* <span style={{ fontSize: "9px", fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: isPos ? "#00E5A0" : "#FF6C6C" }}>
             {isPos ? "+" : ""}{security.change.toFixed(1)}
