@@ -21,6 +21,9 @@ target_link_libraries(OrderBook PRIVATE OrderBookCore nlohmann_json::nlohmann_js
 add_executable(OrderBookTests tests/order_book_tests.cpp)
 target_link_libraries(OrderBookTests PRIVATE OrderBookCore)
 
+add_executable(RROrderBookTests tests/rr_order_book_tests.cpp)
+target_link_libraries(RROrderBookTests PRIVATE OrderBookCore)
+
 enable_testing()
 add_test(NAME orderbook_tests COMMAND OrderBookTests)
 
