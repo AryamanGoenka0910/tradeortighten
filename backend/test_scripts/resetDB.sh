@@ -96,23 +96,16 @@ if [[ ${#migration_files[@]} -eq 0 ]]; then
   exit 1
 fi
 
+echo "Dropping and recreating schema..."
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<SQL
+drop schema if exists trade_or_tighten cascade;
+create schema trade_or_tighten;
+SQL
+
 echo "Applying migrations..."
 for migration_file in "${migration_files[@]}"; do
   echo "  -> $(basename "$migration_file")"
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration_file"
 done
 
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<SQL
-begin;
-
--- Clear all rows (and reset identity for client_orders.db_order_id).
-truncate table
-  trade_or_tighten.client_orders,
-  trade_or_tighten.client_portfolios,
-  trade_or_tighten.clients
-restart identity;
-
-commit;
-SQL
-
-echo "Done. Migrations applied and database reset."
+echo "Done. Schema dropped, migrations applied, database reset."
