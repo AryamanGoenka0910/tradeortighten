@@ -1,29 +1,30 @@
 create or replace function trade_or_tighten.update_maker_order(
   p_client_id uuid,
-  p_order_id int8,
-  p_trade_price int8,
-  p_trade_qty int8
+  p_order_id int4,
+  p_trade_price int4,
+  p_trade_qty int4,
+  p_asset int2
 )
-
 returns table (
-  db_order_id int8,
+  db_order_id int4,
   client_id uuid,
   client_order_id text,
-  seq int8,
-  order_id int8,
+  seq int4,
+  order_id int4,
   side text,
-  price int8,
-  original_qty int8,
-  current_qty int8,
-  status text
+  price int4,
+  original_qty int4,
+  current_qty int4,
+  status text,
+  asset int2
 )
 language plpgsql
 as $$
 declare
   v_existing record;
-  v_fill_qty int8;
-  v_trade_value int8;
-  v_next_qty int8;
+  v_fill_qty int4;
+  v_trade_value int4;
+  v_next_qty int4;
   v_next_status text;
 begin
   -- Load and lock the maker order.
@@ -37,7 +38,8 @@ begin
     co.price,
     co.original_qty,
     co.current_qty,
-    co.status
+    co.status,
+    co.asset
   into v_existing
   from trade_or_tighten.client_orders co
   where co.client_id = p_client_id
@@ -59,18 +61,28 @@ begin
 
   -- Portfolio settlement for this maker fill.
   if v_existing.side = 'buy' then
-    update trade_or_tighten.client_portfolios cp
+    update trade_or_tighten.client_cash cp
     set
-      cash_available = cp.cash_available - v_trade_value,
-      cash_reserved = cp.cash_reserved - (v_existing.price * v_fill_qty),
-      asset1_available = cp.asset1_available + v_fill_qty
+      cash_available = cash_available - v_trade_value,
+      cash_reserved = cash_reserved - (v_existing.price * v_fill_qty)
     where cp.client_id = p_client_id;
-  else
-    update trade_or_tighten.client_portfolios cp
+
+    update trade_or_tighten.client_positions cp
     set
-      asset1_available = cp.asset1_available - v_fill_qty,
-      asset1_reserved = cp.asset1_reserved - v_fill_qty,
-      cash_available = cp.cash_available + v_trade_value
+      available = available + v_fill_qty
+    where cp.client_id = p_client_id
+      and cp.asset_id = p_asset;
+  else
+    update trade_or_tighten.client_positions cp
+    set
+      available = available - v_fill_qty,
+      reserved = reserved - v_fill_qty
+    where cp.client_id = p_client_id
+      and cp.asset_id = p_asset;
+
+    update trade_or_tighten.client_cash cp
+    set
+      cash_available = cash_available + v_trade_value
     where cp.client_id = p_client_id;
   end if;
 
@@ -90,7 +102,8 @@ begin
     co.price,
     co.original_qty,
     co.current_qty,
-    co.status
+    co.status,
+    co.asset
   into v_existing;
 
   return query
@@ -104,7 +117,8 @@ begin
     v_existing.price,
     v_existing.original_qty,
     v_existing.current_qty,
-    v_existing.status;
+    v_existing.status,
+    v_existing.asset;
 end;
 $$;
 

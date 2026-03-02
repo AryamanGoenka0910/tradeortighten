@@ -1,31 +1,32 @@
 create or replace function trade_or_tighten.update_taker_order(
-    p_client_id uuid,
-    p_client_order_id text,
-    p_seq int8,
-    p_order_id int8,
-    p_order_status text,
-    p_remaining_qty int8,
-    p_price_delta int8,
-    p_asset1_delta int8
+  p_client_id uuid,
+  p_client_order_id text,
+  p_seq int4,
+  p_order_id int4,
+  p_order_status text,
+  p_remaining_qty int4,
+  p_price_delta int4,
+  p_asset_delta int4,
+  p_asset int2
 )
 returns table (
-  db_order_id int8,
+  db_order_id int4,
   client_id uuid,
   client_order_id text,
-  seq int8,
-  order_id int8,
+  seq int4,
+  order_id int4,
   side text,
-  price int8,
-  original_qty int8,
-  current_qty int8,
-  status text
+  price int4,
+  original_qty int4,
+  current_qty int4,
+  status text,
+  asset int2
 )
 language plpgsql
 as $$
 declare
   v_status text;
   v_existing record;
-  v_filled_qty int8;
 begin
   if p_remaining_qty < 0 then
     raise exception 'remaining qty (%) cannot be negative', p_remaining_qty;
@@ -35,8 +36,8 @@ begin
     raise exception 'price_delta (%) cannot be negative', p_price_delta;
   end if;
 
-  if p_asset1_delta < 0 then
-    raise exception 'asset1_delta (%) cannot be negative', p_asset1_delta;
+  if p_asset_delta < 0 then
+    raise exception 'asset_delta (%) cannot be negative', p_asset_delta;
   end if;
 
   if p_order_status not in ('pending', 'partially_filled', 'filled', 'cancelled', 'rejected') then
@@ -56,7 +57,8 @@ begin
     co.price,
     co.original_qty,
     co.current_qty,
-    co.status
+    co.status,
+    co.asset
   into v_existing
   from trade_or_tighten.client_orders co
   where co.client_id = p_client_id
@@ -83,31 +85,41 @@ begin
   -- - reserved  = buying/selling power locked for open orders
   -- - for buys: consume reserved at *limit price* and cash at *execution notional*
   -- - for sells: consume reserved asset qty and credit cash at execution notional
-  if p_asset1_delta > 0 or p_price_delta > 0 then
+  if p_asset_delta > 0 or p_price_delta > 0 then
     if v_existing.side = 'buy' then
-      update trade_or_tighten.client_portfolios cp
+      update trade_or_tighten.client_cash cp
       set
         cash_available = cash_available - p_price_delta,
-        cash_reserved = cash_reserved - (v_existing.price * p_asset1_delta),
-        asset1_available = asset1_available + p_asset1_delta
-      where cp.client_id = p_client_id
-        and cp.cash_reserved >= (v_existing.price * p_asset1_delta);
+        cash_reserved = cash_reserved - (v_existing.price * p_asset_delta)
+      where cp.client_id = p_client_id;
 
       if not found then
         raise exception 'insufficient reserved cash to settle fill (client_id=%, order_id=%)', p_client_id, p_order_id;
       end if;
-    else
-      update trade_or_tighten.client_portfolios cp
+
+      update trade_or_tighten.client_positions cp
       set
-        asset1_available = asset1_available - p_asset1_delta,
-        asset1_reserved = asset1_reserved - p_asset1_delta,
-        cash_available = cash_available + p_price_delta
+        available = available + p_asset_delta
       where cp.client_id = p_client_id
-        and cp.asset1_reserved >= p_asset1_delta;
+        and cp.asset_id = p_asset;
+
+    else
+      update trade_or_tighten.client_positions cp
+      set
+        available = available - p_asset_delta,
+        reserved = reserved - p_asset_delta
+      where cp.client_id = p_client_id
+        and cp.asset_id = p_asset;
 
       if not found then
-        raise exception 'insufficient reserved asset1 to settle fill (client_id=%, order_id=%)', p_client_id, p_order_id;
+        raise exception 'insufficient reserved asset to settle fill (client_id=%, order_id=%)', p_client_id, p_order_id;
       end if;
+
+      update trade_or_tighten.client_cash cp
+      set
+        cash_available = cash_available + p_price_delta
+      where cp.client_id = p_client_id;
+
     end if;
   end if;
 
@@ -127,7 +139,8 @@ begin
     co.price,
     co.original_qty,
     co.current_qty,
-    co.status
+    co.status,
+    co.asset
   into v_existing;
 
   return query
@@ -141,6 +154,7 @@ begin
     v_existing.price,
     v_existing.original_qty,
     v_existing.current_qty,
-    v_existing.status;
+    v_existing.status,
+    v_existing.asset;
 end;
 $$;
