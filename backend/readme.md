@@ -12,7 +12,7 @@ persistant client DB on relaod
 verify Order Ownership by a client
 
 run file:
-node --loader ts-node/esm server.ts
+node --loader ts-node/esm src/server.ts
 
 
 Missing a “push updates even when maker isn’t connected” story

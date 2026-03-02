@@ -46,10 +46,6 @@ begin
     and co.order_id = p_order_id
   for update;
 
-  if not found then
-    return;
-  end if;
-
   v_fill_qty := least(p_trade_qty, v_existing.current_qty);
   v_trade_value := p_trade_price * v_fill_qty;
   v_next_qty := greatest(0, v_existing.current_qty - v_fill_qty);
