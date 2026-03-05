@@ -2,6 +2,7 @@ export default function PortfolioPanel({ portfolio, orders }) {
   // console.log(portfolio);
   const cash = Number(portfolio?.cashAvailable ?? 0);
   const cashReserved = Number(portfolio?.cashReserved ?? 0);
+  const pos = portfolio?.positions ?? {};
 
   const securities = {
     "CASH": {
@@ -13,29 +14,29 @@ export default function PortfolioPanel({ portfolio, orders }) {
     },
     "ALPHA": {
       ticker: "ALPHA",
-      qty: portfolio?.asset1Available ?? 0,
-      reserved: portfolio?.asset1Reserved ?? 0,
+      qty: pos[1]?.available ?? 0,
+      reserved: pos[1]?.reserved ?? 0,
       price: 50,
       isCash: false,
     },
     "BETA": {
       ticker: "BETA",
-      qty: portfolio?.asset2Available ?? 0,
-      reserved: portfolio?.asset2Reserved ?? 0,
+      qty: pos[2]?.available ?? 0,
+      reserved: pos[2]?.reserved ?? 0,
       price: 50,
       isCash: false,
     },
     "GAMMA": {
       ticker: "GAMMA",
-      qty: portfolio?.asset3Available ?? 0,
-      reserved: portfolio?.asset3Reserved ?? 0,
+      qty: pos[3]?.available ?? 0,
+      reserved: pos[3]?.reserved ?? 0,
       price: 50,
       isCash: false,
     },
     "DELTA": {
       ticker: "DELTA",
-      qty: portfolio?.asset4Available ?? 0,
-      reserved: portfolio?.asset4Reserved ?? 0,
+      qty: pos[4]?.available ?? 0,
+      reserved: pos[4]?.reserved ?? 0,
       price: 50,
       isCash: false,
     },

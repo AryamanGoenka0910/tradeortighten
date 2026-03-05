@@ -89,6 +89,39 @@ const INITIAL_MESSAGES = [
   { id: 2, title: "Market Intel: Alpha Index", body: "ALPHA has shown strong momentum. Rumor: a catalyst event may hit within 30 min.", time: "10:15 AM", read: false },
 ];
 
+// --- Portfolio helpers ---
+// Universal portfolio shape:
+// { cashAvailable, cashReserved, positions: { [assetId]: { available, reserved } } }
+
+function normalizeFullPortfolio(raw) {
+  return {
+    cashAvailable: Number(raw.cashAvailable ?? 0),
+    cashReserved: Number(raw.cashReserved ?? 0),
+    positions: {
+      1: { available: Number(raw.asset1Available ?? 0), reserved: Number(raw.asset1Reserved ?? 0) },
+      2: { available: Number(raw.asset2Available ?? 0), reserved: Number(raw.asset2Reserved ?? 0) },
+      3: { available: Number(raw.asset3Available ?? 0), reserved: Number(raw.asset3Reserved ?? 0) },
+      4: { available: Number(raw.asset4Available ?? 0), reserved: Number(raw.asset4Reserved ?? 0) },
+    },
+  };
+}
+
+function mergePartialPortfolio(prev, partial) {
+  const base = prev ?? { cashAvailable: 0, cashReserved: 0, positions: {} };
+  const next = {
+    cashAvailable: Number(partial.cashAvailable ?? base.cashAvailable),
+    cashReserved: Number(partial.cashReserved ?? base.cashReserved),
+    positions: { ...base.positions },
+  };
+  if (partial.assetId != null) {
+    next.positions[partial.assetId] = {
+      available: Number(partial.positionsAvailable ?? 0),
+      reserved: Number(partial.positionsReserved ?? 0),
+    };
+  }
+  return next;
+}
+
 // --- Toast ---
 function Toast({ message, onDismiss }) {
   useEffect(() => { const t = setTimeout(onDismiss, 5000); return () => clearTimeout(t); }, [onDismiss]);
@@ -226,7 +259,8 @@ export default function TradingCompetitionUI() {
       setClientId(user.id);
       setClientName(resolvedClientName);
 
-      socket = new WebSocket("wss://ary-credit.ngrok.app");
+      //socket = new WebSocket("wss://ary-credit.ngrok.app");
+      socket = new WebSocket("ws://localhost:8080");
       wsRef.current = socket;
 
       socket.onopen = () => {
@@ -238,6 +272,7 @@ export default function TradingCompetitionUI() {
             lastSeq: 0,
           }),
         );
+        console.log("WebSocket connection opened.");
       };
 
       socket.onmessage = (event) => {
@@ -248,9 +283,11 @@ export default function TradingCompetitionUI() {
           return;
         }
 
+        console.log("Received message: ", msg);
         if (msg.clientId === user.id && msg.type === "initial_load_snapshot") {
+          console.log("Received initial load snapshot: ", msg);
           if (msg.portfolio) {
-            setPortfolio(msg.portfolio);
+            setPortfolio(normalizeFullPortfolio(msg.portfolio));
           }
           if (msg.client?.lastSeq != null) {
             syncSeq(msg.client.lastSeq);
@@ -265,6 +302,9 @@ export default function TradingCompetitionUI() {
         if (msg.clientId === user.id && msg.type === "order_update_snapshot" && msg.order) {
           syncSeq(msg.seq);
           applyOrderDelta(msg.order);
+          if (msg.portfolio) {
+            setPortfolio((prev) => mergePartialPortfolio(prev, msg.portfolio));
+          }
           return;
         }
         
@@ -285,9 +325,9 @@ export default function TradingCompetitionUI() {
         }
       };
 
-      socket.onerror = () => {
-        setAuthError("WebSocket connection failed.");
-      };
+      // socket.onerror = () => {
+      //   setAuthError("WebSocket connection failed.");
+      // };
     };
 
     boot();
