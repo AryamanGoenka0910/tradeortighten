@@ -8,6 +8,7 @@ import PortfolioPanel from "./components/PortfolioPanel";
 import OpenOrdersPanel from "./components/OpenOrdersPanel";
 import LeaderboardPanel from "./components/LeaderboardPanel";
 import InboxPanel from "./components/InboxPanel";
+import AdminPanel from "./components/AdminPanel";
 
 // --- Mock Data ---
 const SECURITIES = [
@@ -145,6 +146,7 @@ function Toast({ message, onDismiss }) {
 // --- Main App ---
 export default function TradingCompetitionUI() {
   const router = useRouter();
+  const [role, setRole] = useState("attendee"); // "attendee" | "sponsor" | "admin"
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
   const [messages, setMessages] = useState(INITIAL_MESSAGES);
@@ -374,24 +376,26 @@ export default function TradingCompetitionUI() {
 
   const unreadCount = messages.filter((m) => !m.read).length;
 
-  if (authError) {
-    return (
-      <div style={{ width: "100vw", height: "100vh", background: "#080a12", color: "#e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk',-apple-system,sans-serif" }}>
-        <div style={{ border: "1px solid #3b1820", background: "#140b10", borderRadius: "10px", padding: "16px 18px", maxWidth: "520px" }}>
-          <div style={{ fontSize: "14px", fontWeight: 700, color: "#ff8ea1", marginBottom: "8px" }}>Authentication Error</div>
-          <div style={{ fontSize: "12px", color: "#f3c5cf" }}>{authError}</div>
-        </div>
-      </div>
-    );
-  }
 
-  if (!clientId || !clientName) {
-    return (
-      <div style={{ width: "100vw", height: "100vh", background: "#080a12", color: "#e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk',-apple-system,sans-serif" }}>
-        Loading trader session...
-      </div>
-    );
-  }
+  // if (authError) {
+  //   return (
+  //     <div style={{ width: "100vw", height: "100vh", background: "#080a12", color: "#e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk',-apple-system,sans-serif" }}>
+  //       <div style={{ border: "1px solid #3b1820", background: "#140b10", borderRadius: "10px", padding: "16px 18px", maxWidth: "520px" }}>
+  //         <div style={{ fontSize: "14px", fontWeight: 700, color: "#ff8ea1", marginBottom: "8px" }}>Authentication Error</div>
+  //         <div style={{ fontSize: "12px", color: "#f3c5cf" }}>{authError}</div>
+  //       </div>
+  //     </div>
+  //   );
+  // }
+
+  // if (!clientId || !clientName) {
+  //   return (
+  //     <div style={{ width: "100vw", height: "100vh", background: "#080a12", color: "#e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Space Grotesk',-apple-system,sans-serif" }}>
+  //       Loading trader session...
+  //     </div>
+  //   );
+  // }
+  
 
   return (
     <div style={{ width: "100vw", height: "100vh", background: "#080a12", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: "'Space Grotesk',-apple-system,sans-serif" }}>
@@ -435,6 +439,25 @@ export default function TradingCompetitionUI() {
             <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#00E5A0", animation: "livePulse 2s infinite" }} />
             <span style={{ fontSize: "8px", color: "#00E5A0", fontWeight: 700, letterSpacing: "1px" }}>LIVE</span>
           </div>
+          {/* Role Selector */}
+          <div style={{
+            marginLeft: "12px", display: "flex", alignItems: "center", gap: "6px",
+            padding: "3px 4px", borderRadius: "6px", background: "#0a0d14", border: "1px solid #1a1f2e",
+          }}>
+            {["attendee", "sponsor", "admin"].map((r) => (
+              <button key={r} onClick={() => setRole(r)} style={{
+                padding: "3px 10px", borderRadius: "4px", fontSize: "9px", fontWeight: 700,
+                cursor: "pointer", border: "none", letterSpacing: "0.5px", textTransform: "uppercase",
+                fontFamily: "'Space Grotesk',sans-serif", transition: "all 0.15s",
+                background: role === r
+                  ? (r === "admin" ? "rgba(255,108,108,0.12)" : r === "sponsor" ? "rgba(108,142,255,0.12)" : "rgba(0,229,160,0.12)")
+                  : "transparent",
+                color: role === r
+                  ? (r === "admin" ? "#FF6C6C" : r === "sponsor" ? "#6C8EFF" : "#00E5A0")
+                  : "#3b4252",
+              }}>{r}</button>
+            ))}
+          </div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -442,21 +465,25 @@ export default function TradingCompetitionUI() {
             <span style={{ fontSize: "8px", color: "#4b5563" }}>TIME</span>
             <span style={{ fontSize: "14px", fontWeight: 800, color: "#e5e7eb", fontFamily: "'JetBrains Mono',monospace", letterSpacing: "1px" }}>{clock}</span>
           </div>
-          <button onClick={() => { setShowInbox(!showInbox); setShowLeaderboard(false); }} style={{
-            padding: "6px 10px", borderRadius: "6px", border: "1px solid #1a1f2e", cursor: "pointer",
-            background: showInbox ? "#151a27" : "#0f1219", color: "#e5e7eb", fontSize: "12px",
-            display: "flex", alignItems: "center", position: "relative",
-          }}>
-            📨
-            {unreadCount > 0 && <span style={{ position: "absolute", top: "-3px", right: "-3px", background: "#FF6C6C", color: "#0a0d14", fontSize: "8px", fontWeight: 800, width: "14px", height: "14px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono',monospace" }}>{unreadCount}</span>}
-          </button>
-          <button onClick={() => { setShowLeaderboard(!showLeaderboard); setShowInbox(false); }} style={{
-            padding: "6px 10px", borderRadius: "6px", border: "1px solid #1a1f2e", cursor: "pointer",
-            background: showLeaderboard ? "#151a27" : "#0f1219", color: "#e5e7eb", fontSize: "11px",
-            display: "flex", alignItems: "center", gap: "4px", fontWeight: 600,
-          }}>
-            🏆 <span style={{ fontSize: "10px" }}>Board</span>
-          </button>
+          {role !== "admin" && (
+            <button onClick={() => { setShowInbox(!showInbox); setShowLeaderboard(false); }} style={{
+              padding: "6px 10px", borderRadius: "6px", border: "1px solid #1a1f2e", cursor: "pointer",
+              background: showInbox ? "#151a27" : "#0f1219", color: "#e5e7eb", fontSize: "12px",
+              display: "flex", alignItems: "center", position: "relative",
+            }}>
+              📨
+              {unreadCount > 0 && <span style={{ position: "absolute", top: "-3px", right: "-3px", background: "#FF6C6C", color: "#0a0d14", fontSize: "8px", fontWeight: 800, width: "14px", height: "14px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono',monospace" }}>{unreadCount}</span>}
+            </button>
+          )}
+          {role === "attendee" && (
+            <button onClick={() => { setShowLeaderboard(!showLeaderboard); setShowInbox(false); }} style={{
+              padding: "6px 10px", borderRadius: "6px", border: "1px solid #1a1f2e", cursor: "pointer",
+              background: showLeaderboard ? "#151a27" : "#0f1219", color: "#e5e7eb", fontSize: "11px",
+              display: "flex", alignItems: "center", gap: "4px", fontWeight: 600,
+            }}>
+              🏆 <span style={{ fontSize: "10px" }}>Board</span>
+            </button>
+          )}
           <button onClick={handleSignOut} disabled={isSigningOut} style={{
             padding: "6px 10px", borderRadius: "6px", border: "1px solid #3b1820", cursor: isSigningOut ? "not-allowed" : "pointer",
             background: "#140b10", color: "#ff8ea1", fontSize: "11px",
@@ -467,27 +494,41 @@ export default function TradingCompetitionUI() {
         </div>
       </div>
 
-      {/* 3x2 Grid */}
-      <div style={{
-        flex: 1, display: "grid",
-        gridTemplateColumns: "repeat(3,minmax(0,1fr))",
-        gridTemplateRows: "repeat(2,minmax(0,1fr))",
-        gap: "6px", padding: "6px", minHeight: 0,
-      }}>
-        <SecurityQuadrant security={SECURITIES[0]} orderBook={orderBookA1} onOrder={handleOrder} />
-        <SecurityQuadrant security={SECURITIES[1]} orderBook={orderBookA1} onOrder={handleOrder} />
-        <SecurityQuadrant security={SECURITIES[2]} orderBook={orderBookA1} onOrder={handleOrder} />
-        <SecurityQuadrant security={SECURITIES[3]} orderBook={orderBookA1} onOrder={handleOrder} />
-        <div style={{ gridColumn: "3", gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "6px", minHeight: 0 }}>
-          <PortfolioPanel portfolio={portfolio} orders={openOrders} />
-          <div style={{ flex: 1, minHeight: 0 }}>
-            <OpenOrdersPanel orders={openOrders} onCancel={cancelOrder} />
+      {/* Main Content - Role Dependent */}
+      {role === "admin" ? (
+        <AdminPanel />
+      ) : (
+        <>
+          {/* 3x2 Grid */}
+          <div style={{
+            flex: 1, display: "grid",
+            gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+            gridTemplateRows: "repeat(2,minmax(0,1fr))",
+            gap: "6px", padding: "6px", minHeight: 0,
+          }}>
+            <SecurityQuadrant security={SECURITIES[0]} orderBook={orderBookA1} onOrder={handleOrder} />
+            <SecurityQuadrant security={SECURITIES[1]} orderBook={orderBookA1} onOrder={handleOrder} />
+            <SecurityQuadrant security={SECURITIES[2]} orderBook={orderBookA1} onOrder={handleOrder} />
+            <SecurityQuadrant security={SECURITIES[3]} orderBook={orderBookA1} onOrder={handleOrder} />
+            <div style={{ gridColumn: "3", gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "6px", minHeight: 0 }}>
+              {role === "attendee" ? (
+                <>
+                  <PortfolioPanel portfolio={portfolio} orders={openOrders} />
+                  <div style={{ flex: 1, minHeight: 0 }}>
+                    <OpenOrdersPanel orders={openOrders} onCancel={cancelOrder} />
+                  </div>
+                </>
+              ) : (
+                /* Sponsor: Leaderboard replaces Portfolio in right column */
+                <LeaderboardPanel leaderboard={LEADERBOARD} mode="sponsor" />
+              )}
+            </div>
           </div>
-        </div>
-      </div>
 
-      {showLeaderboard && <LeaderboardPanel onClose={() => setShowLeaderboard(false)} leaderboard={LEADERBOARD} />}
-      {showInbox && <InboxPanel messages={messages} onClose={() => setShowInbox(false)} onMarkRead={markRead} />}
+          {showLeaderboard && role === "attendee" && <LeaderboardPanel onClose={() => setShowLeaderboard(false)} leaderboard={LEADERBOARD} mode="attendee" />}
+          {showInbox && role !== "admin" && <InboxPanel messages={messages} onClose={() => setShowInbox(false)} onMarkRead={markRead} />}
+        </>
+      )}
     </div>
   );
 }
