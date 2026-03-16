@@ -41,10 +41,19 @@ export const handlePlace = async (
     pre = rows[0];
     console.log("place_taker_order result: ", pre);
   } catch (e) {
+    let serverLastSeq: number | undefined;
+    try {
+      const { rows: seqRows } = await pool.query(
+        "select last_seq from trade_or_tighten.clients where client_id = $1",
+        [message.clientId]
+      );
+      if (seqRows[0]) serverLastSeq = Number(seqRows[0].last_seq);
+    } catch {}
     sendToClient(message.clientId, {
       type: "place_rejected",
       clientId: message.clientId,
       seq: message.seq,
+      serverLastSeq,
       reason: String(e),
     });
     console.error("Error in place_taker_order: ", e);

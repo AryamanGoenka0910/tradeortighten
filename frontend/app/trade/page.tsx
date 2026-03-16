@@ -48,6 +48,7 @@ interface WsMessage {
   orderBook?: OrderBook;
   assetId?: number;
   seq?: number;
+  serverLastSeq?: number;
   client?: { lastSeq?: number };
   entries?: LeaderboardEntry[];
 }
@@ -290,7 +291,11 @@ export default function TradePage() {
         }
 
         if (msg.clientId === user.id && msg.type === "place_rejected") {
-          syncSeq(msg.seq);
+          if (msg.serverLastSeq != null) {
+            seqRef.current = msg.serverLastSeq;
+          } else {
+            syncSeq(msg.seq);
+          }
           return;
         }
       };
