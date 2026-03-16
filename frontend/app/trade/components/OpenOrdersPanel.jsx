@@ -1,4 +1,4 @@
-function OrdersTable({ title, rows, sideColor }) {
+function OrdersTable({ title, rows, sideColor, onCancel }) {
   return (
     <div style={{ width: "100%", minHeight: 0, fontSize: "13px", fontFamily: "'Space Grotesk',sans-serif" }}>
       <div style={{ fontWeight: 700, color: sideColor, marginBottom: "4px"}}>
@@ -8,7 +8,7 @@ function OrdersTable({ title, rows, sideColor }) {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0,1fr) 84px 110px 72px 92px",
+          gridTemplateColumns: "minmax(0,1fr) 84px 110px 72px 88px 32px",
           columnGap: "8px",
           alignItems: "center",
           padding: "2px 6px",
@@ -24,15 +24,16 @@ function OrdersTable({ title, rows, sideColor }) {
         <span style={{ textAlign: "right" }}>Remaining</span>
         <span style={{ textAlign: "right" }}>Qty</span>
         <span style={{ textAlign: "center" }}>Status</span>
+        <span />
       </div>
 
       <div style={{ maxHeight: "140px", overflowY: "auto", minHeight: 0 }}>
           {rows.length === 0 ? (
-            <div style={{  color: "#3b4252", textAlign: "center", padding: "20px 0" }}>No open orders</div>
+            <div style={{ color: "#3b4252", textAlign: "center", padding: "20px 0" }}>No open orders</div>
           ) : rows.map((ord) => (
             <div key={ord.id} style={{
               display: "grid",
-              gridTemplateColumns: "minmax(0,1fr) 84px 110px 72px 92px",
+              gridTemplateColumns: "minmax(0,1fr) 84px 110px 72px 88px 32px",
               columnGap: "8px",
               alignItems: "center",
               padding: "6px 6px",
@@ -45,6 +46,30 @@ function OrdersTable({ title, rows, sideColor }) {
               <span style={{ textAlign: "right", fontWeight: 700, color: "#9ca3af" }}>{ord.remainingQty}</span>
               <span style={{ textAlign: "right", fontWeight: 700, color: "#9ca3af" }}>{ord.qty}</span>
               <span style={{ textAlign: "center", fontWeight: 700, letterSpacing: "0.3px", color: ord.status === "PARTIAL" ? "#FFB84D" : "#6C8EFF" }}>{ord.status}</span>
+              {(ord.status === "RESTING" || ord.status === "PARTIAL") ? (
+                <button
+                  onClick={() => onCancel(ord)}
+                  title="Cancel order"
+                  style={{
+                    background: "transparent",
+                    border: "1px solid #2a1520",
+                    borderRadius: "4px",
+                    color: "#FF6C6C",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    lineHeight: 1,
+                    padding: "3px 5px",
+                    transition: "background 0.15s",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,108,108,0.12)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  ×
+                </button>
+              ) : (
+                <span />
+              )}
             </div>
           ))}
       </div>
@@ -54,7 +79,7 @@ function OrdersTable({ title, rows, sideColor }) {
 
 export default function OpenOrdersPanel({ orders, onCancel }) {
   return (
-    <div 
+    <div
       style={{
         background: "#0c0f17", border: "1px solid #131825", borderRadius: "10px",
         padding: "12px 14px", display: "flex", flexDirection: "column", gap: "4px",
@@ -68,8 +93,8 @@ export default function OpenOrdersPanel({ orders, onCancel }) {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1, minHeight: 0 }}>
-        <OrdersTable title="Buy Orders" rows={orders.filter((ord) => ord.side === "BUY")} sideColor="#00E5A0" />
-        <OrdersTable title="Sell Orders" rows={orders.filter((ord) => ord.side === "SELL")} sideColor="#FF6C6C" />
+        <OrdersTable title="Buy Orders" rows={orders.filter((ord) => ord.side === "BUY")} sideColor="#00E5A0" onCancel={onCancel} />
+        <OrdersTable title="Sell Orders" rows={orders.filter((ord) => ord.side === "SELL")} sideColor="#FF6C6C" onCancel={onCancel} />
       </div>
     </div>
   );

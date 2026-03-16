@@ -11,7 +11,7 @@ type PlaceMessage = {
   side: "buy" | "sell";
   price: number;
   qty: number;
-  // asset: number;
+  asset: number;
 };
 
 export const handlePlace = async (
@@ -21,19 +21,21 @@ export const handlePlace = async (
 ): Promise<void> => {
   console.log("Placing order: ", message);
 
+  const assetId = message.asset ?? 1;
+
   // 1. Pre-flight DB check
   let pre;
   try {
     const { rows } = await pool.query(
       "select * from trade_or_tighten.place_taker_order($1,$2,$3,$4,$5,$6,$7)",
       [
-        message.clientId, 
-        message.clientOrderId, 
-        message.seq, 
-        message.side, 
-        message.price, 
+        message.clientId,
+        message.clientOrderId,
+        message.seq,
+        message.side,
+        message.price,
         message.qty,
-        1
+        assetId
       ]
     );
     pre = rows[0];
@@ -51,9 +53,9 @@ export const handlePlace = async (
 
   // 2. Duplicate check
   const submitKey = `${message.clientId}:${message.seq}`;
-  const preOrder = rowToOrderState(pre);
-
   if (submittedToEngine.has(submitKey)) {
+    const preOrder = rowToOrderState(pre);
+
     sendToClient(message.clientId, {
       type: "place_duplicate_ignored",
       clientId: message.clientId,
@@ -61,6 +63,7 @@ export const handlePlace = async (
       clientOrderId: message.clientOrderId,
       order: preOrder,
     });
+
     return;
   }
   submittedToEngine.add(submitKey);
@@ -69,6 +72,7 @@ export const handlePlace = async (
   const res = await bridge.request({
     op: "place",
     clientId: message.clientId,
+    assetId,
     side: message.side,
     price: message.price,
     qty: message.qty,
@@ -84,7 +88,6 @@ export const handlePlace = async (
       clientId: message.clientId,
       seq: message.seq,
       reason: res.order_status,
-      response: res,
     });
     console.error("Engine rejected order: ", res);
     return;
@@ -92,13 +95,14 @@ export const handlePlace = async (
 
   // 4. Compute taker fill deltas
   let takerPriceDelta = 0;
-  let takerAsset1Delta = 0;
+  let takerAssetDelta = 0;
+
   for (const trade of res.trades) {
     takerPriceDelta += trade.price * trade.qty;
-    takerAsset1Delta += trade.qty;
+    takerAssetDelta += trade.qty;
   }
 
-  const takerCurrentQty = Math.max(0, message.qty - takerAsset1Delta);
+  const takerCurrentQty = Math.max(0, message.qty - takerAssetDelta);
   const takerStatus = deriveOrderStatus(message.qty, takerCurrentQty);
 
   // 5. Update taker in DB
@@ -113,21 +117,16 @@ export const handlePlace = async (
         takerStatus,
         takerCurrentQty,
         takerPriceDelta,
-        takerAsset1Delta,
-        1
+        takerAssetDelta,
+        assetId
       ]
     );
     const post = rows[0];
 
-    const takerOrder = {
-      ...rowToOrderState(post),
-      currentQty: takerCurrentQty,
-      status: takerStatus,
-    };
-
     const takerPortfolio = post.positions_available != null ? {
       cashAvailable: Number(post.cash_available),
       cashReserved: Number(post.cash_reserved),
+      assetId,
       positionsAvailable: Number(post.positions_available),
       positionsReserved: Number(post.positions_reserved),
     } : undefined;
@@ -137,11 +136,11 @@ export const handlePlace = async (
       clientId: message.clientId,
       seq: message.seq,
       orderId: res.orderId,
-      order: takerOrder,
+      order: rowToOrderState(post),
       portfolio: takerPortfolio,
     });
 
-    console.log("Taker order updated: ", takerOrder);
+    console.log("Taker order updated: ", post);
   } catch (e) {
     sendToClient(message.clientId, {
       type: "update_taker_order_rejected",
@@ -161,31 +160,39 @@ export const handlePlace = async (
 
     try {
       const { rows } = await pool.query(
-        "select * from trade_or_tighten.update_maker_order($1,$2,$3,$4, $5)",
-        [makerClientId, makerOrderId, trade.price, trade.qty, 1]
+        "select * from trade_or_tighten.update_maker_order($1,$2,$3,$4,$5)",
+        [
+          makerClientId,
+          makerOrderId,
+          trade.price,
+          trade.qty,
+          assetId
+        ]
       );
       const postMaker = rows[0];
-      if (!postMaker) throw new Error("update_maker_order returned no rows");
+
+      const makerPortfolio = {
+        cashAvailable: Number(postMaker.cash_available),
+        cashReserved: Number(postMaker.cash_reserved),
+        assetId,
+        positionsAvailable: Number(postMaker.positions_available),
+        positionsReserved: Number(postMaker.positions_reserved),
+      };
 
       sendToClient(makerClientId, {
         type: "order_update_snapshot",
         clientId: makerClientId,
         orderId: makerOrderId,
         order: rowToOrderState(postMaker),
+        portfolio: makerPortfolio,
       });
       console.log(`Maker order ${makerOrderId} updated for client ${makerClientId}: `, postMaker);
     } catch (e) {
-      sendToClient(makerClientId, {
-        type: "update_maker_order_rejected",
-        reason: String(e),
-        clientId: message.clientId,
-        seq: message.seq,
-      });
       console.error(`Error updating maker order ${makerOrderId} for client ${makerClientId}: `, e);
       break;
     }
   }
 
   // 7. Broadcast updated order book to all clients
-  broadcastOrderBook(res.all_bids, res.all_asks, message.seq);
+  broadcastOrderBook(res.all_bids, res.all_asks, assetId, message.seq);
 };

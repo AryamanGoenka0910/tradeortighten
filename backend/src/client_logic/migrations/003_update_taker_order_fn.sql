@@ -62,12 +62,12 @@ begin
   -- - for sells: consume reserved asset qty and credit cash at execution notional
   if p_asset_delta > 0 or p_price_delta > 0 then
     if v_existing.side = 'buy' then
-      update trade_or_tighten.client_cash cp
+      update trade_or_tighten.client_cash cc
       set
-        cash_available = cash_available - p_price_delta,
-        cash_reserved = cash_reserved - (v_existing.price * p_asset_delta)
-      where cp.client_id = p_client_id
-      returning cash_available, cash_reserved
+        cash_available = cc.cash_available - p_price_delta,
+        cash_reserved = cc.cash_reserved - (v_existing.price * p_asset_delta)
+      where cc.client_id = p_client_id
+      returning cc.cash_available, cc.cash_reserved
       into v_cash;
 
       update trade_or_tighten.client_positions cp
@@ -88,13 +88,25 @@ begin
       returning available, reserved
       into v_positions;
 
-      update trade_or_tighten.client_cash cp
+      update trade_or_tighten.client_cash cc
       set
-        cash_available = cash_available + p_price_delta
-      where cp.client_id = p_client_id
-      returning cash_available, cash_reserved
+        cash_available = cc.cash_available + p_price_delta
+      where cc.client_id = p_client_id
+      returning cc.cash_available, cc.cash_reserved
       into v_cash;
     end if;
+
+  else -- No trades occurred, just update the order status and return current portfolio state.
+    select cp.available, cp.reserved
+    into v_positions
+    from trade_or_tighten.client_positions cp
+    where cp.client_id = p_client_id
+      and cp.asset_id = p_asset;
+
+    select cc.cash_available, cc.cash_reserved
+    into v_cash
+    from trade_or_tighten.client_cash cc
+    where cc.client_id = p_client_id;
   end if;
 
   update trade_or_tighten.client_orders co

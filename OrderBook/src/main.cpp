@@ -1,4 +1,5 @@
 #include <iostream>
+#include <unordered_map>
 #include <nlohmann/json.hpp>
 #include "order_book.h"
 #include "print_utils.h"
@@ -6,10 +7,10 @@
 /*
 OrderBook Engine API:
 
-IMPORTANT: 
+IMPORTANT:
  - All operations are async and return a Promise
  - Opperations are only validated for OrderBook correctness, not for backend validation for game logic
-            
+
 */
 
 namespace lob {
@@ -42,7 +43,9 @@ nlohmann::json book_to_json(
 } // namespace lob
 
 int main() {
-    lob::OrderBook ob;
+    // One order book per asset (asset IDs 1–4)
+    std::unordered_map<int, lob::OrderBook> books;
+
     std::string incoming_message;
 
     while (std::getline(std::cin, incoming_message)) {
@@ -62,6 +65,9 @@ int main() {
             resError["trades"] = nlohmann::json::array();
 
             try {
+                int assetId = req.value("assetId", 1);
+                auto& ob = books[assetId];
+
                 auto side_string = req.at("side").get<std::string>();
                 lob::Side side;
                 if (side_string == "buy") {
@@ -69,28 +75,28 @@ int main() {
                 } else if (side_string == "sell") {
                     side = lob::Side::Sell;
                 } else {
-                    std::cerr << "Error: Invalid side" << std::endl; 
+                    std::cerr << "Error: Invalid side" << std::endl;
                     std::cout << resError.dump() << "\n" << std::flush;
                     continue;
                 }
 
                 auto price = req.at("price").get<int>();
                 if (price <= 0) {
-                    std::cerr << "Error: Invalid price" << std::endl; 
-                    std::cout << resError.dump() << "\n" << std::flush;
-                    continue;
-                }
-                
-                auto qty = req.at("qty").get<int>(); // check they can afford this in backend not this orderbook engine
-                if (qty <= 0) {
-                    std::cerr << "Error: Invalid quantity" << std::endl; 
+                    std::cerr << "Error: Invalid price" << std::endl;
                     std::cout << resError.dump() << "\n" << std::flush;
                     continue;
                 }
 
-                auto result = ob.place_limit(clientId, side, price, qty); // Place Order Result
+                auto qty = req.at("qty").get<int>();
+                if (qty <= 0) {
+                    std::cerr << "Error: Invalid quantity" << std::endl;
+                    std::cout << resError.dump() << "\n" << std::flush;
+                    continue;
+                }
+
+                auto result = ob.place_limit(clientId, side, price, qty);
                 if (result.order_id == 0) {
-                    std::cerr << "Error: Invalid order" << std::endl; 
+                    std::cerr << "Error: Invalid order" << std::endl;
                     std::cout << resError.dump() << "\n" << std::flush;
                     continue;
                 }
@@ -102,10 +108,11 @@ int main() {
                 res["reqId"] = reqId;
                 res["clientId"] = clientId;
                 res["op"] = operation;
+                res["assetId"] = assetId;
                 res["orderId"] = result.order_id;
                 res["execution_status"] = true;
                 res["trades"] = result.trades;
-                
+
                 res["all_bids"] = book_to_json(ob.all_bids(), "bids");
                 res["all_asks"] = book_to_json(ob.all_asks(), "asks");
 
@@ -116,13 +123,54 @@ int main() {
                 std::cout << resError.dump() << "\n" << std::flush;
                 continue;
             }
+
+        } else if (operation == "cancel") {
+
+            nlohmann::json resError;
+            resError["reqId"] = reqId;
+            resError["clientId"] = clientId;
+            resError["op"] = operation;
+            resError["execution_status"] = false;
+
+            try {
+                int assetId = req.value("assetId", 1);
+                auto orderId = static_cast<lob::OrderId>(req.at("orderId").get<unsigned long long>());
+                auto& ob = books[assetId];
+
+                ob.cancel_order(orderId);
+
+                nlohmann::json res;
+                res["reqId"] = reqId;
+                res["clientId"] = clientId;
+                res["op"] = operation;
+                res["assetId"] = assetId;
+                res["orderId"] = static_cast<int64_t>(orderId);
+                res["execution_status"] = true;
+                res["all_bids"] = book_to_json(ob.all_bids(), "bids");
+                res["all_asks"] = book_to_json(ob.all_asks(), "asks");
+
+                std::cout << res.dump() << "\n" << std::flush;
+
+            } catch (const std::exception& e) {
+                std::cerr << "Error cancelling order: " << e.what() << std::endl;
+                std::cout << resError.dump() << "\n" << std::flush;
+                continue;
+            }
+
         } else if (operation == "initial_load") {
             nlohmann::json res;
             res["reqId"] = reqId;
             res["clientId"] = clientId;
             res["op"] = operation;
-            res["all_bids"] = book_to_json(ob.all_bids(), "bids");
-            res["all_asks"] = book_to_json(ob.all_asks(), "asks");
+
+            // Return current state of all 4 asset books
+            for (int assetId = 1; assetId <= 4; ++assetId) {
+                auto& ob = books[assetId];
+                std::string key = std::to_string(assetId);
+                res["books"][key]["all_bids"] = book_to_json(ob.all_bids(), "bids");
+                res["books"][key]["all_asks"] = book_to_json(ob.all_asks(), "asks");
+            }
+
             std::cout << res.dump() << "\n" << std::flush;
         }
     }

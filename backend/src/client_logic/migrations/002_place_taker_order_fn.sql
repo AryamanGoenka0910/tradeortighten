@@ -129,6 +129,32 @@ begin
     raise exception 'missing portfolio';
   end if;
 
+  -- Self-match prevention: reject if client has a resting order on the opposite
+  -- side at a price that would cross (i.e., would fill against their own order).
+  if p_side = 'buy' then
+    if exists (
+      select 1 from trade_or_tighten.client_orders co
+      where co.client_id = p_client_id
+        and co.asset = p_asset
+        and co.side = 'sell'
+        and co.price <= p_price
+        and co.status in ('pending', 'partially_filled')
+    ) then
+      raise exception 'self-match prevented: client has a resting sell at or below %', p_price;
+    end if;
+  else
+    if exists (
+      select 1 from trade_or_tighten.client_orders co
+      where co.client_id = p_client_id
+        and co.asset = p_asset
+        and co.side = 'buy'
+        and co.price >= p_price
+        and co.status in ('pending', 'partially_filled')
+    ) then
+      raise exception 'self-match prevented: client has a resting buy at or above %', p_price;
+    end if;
+  end if;
+
   if p_side = 'buy' then
     if (v_cash_available - v_cash_reserved) < (p_price * p_qty) then
       raise exception 'insufficient cash';

@@ -19,6 +19,7 @@ Validates and inserts a new taker order, enforcing sequence ordering (idempotenc
 - On retry: payload must match existing order fields exactly
 - Sufficient free cash (buy): `cash_available - cash_reserved >= price * qty`
 - Sufficient free asset (sell): `asset_available - asset_reserved >= qty`
+- No crossing resting order on the opposite side for the same asset (self-match prevention)
 
 ---
 

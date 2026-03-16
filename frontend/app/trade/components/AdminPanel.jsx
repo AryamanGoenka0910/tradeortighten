@@ -106,51 +106,138 @@ function generateLog() {
   return { time, level: template.level, msg };
 }
 
-function LogPanel({ logs }) {
+const LEVEL_META = {
+  all:     { label: "ALL",     color: "#6b7280" },
+  info:    { label: "INFO",    color: "#4b5563" },
+  connect: { label: "CONN",    color: "#00E5A0" },
+  order:   { label: "ORDER",   color: "#6C8EFF" },
+  warn:    { label: "WARN",    color: "#FFB84D" },
+  error:   { label: "ERROR",   color: "#FF6C6C" },
+};
+
+function levelColor(level) {
+  return LEVEL_META[level]?.color ?? "#4b5563";
+}
+
+function LogPanel({ logs, onClear }) {
   const scrollRef = useRef(null);
+  const [filter, setFilter] = useState("all");
+  const [autoScroll, setAutoScroll] = useState(true);
+
+  const filtered = filter === "all" ? logs : logs.filter((l) => l.level === filter);
 
   useEffect(() => {
-    if (scrollRef.current) {
+    if (autoScroll && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [logs]);
+  }, [filtered, autoScroll]);
 
-  const levelColor = (level) => {
-    switch (level) {
-      case "info": return "#4b5563";
-      case "connect": return "#00E5A0";
-      case "order": return "#6C8EFF";
-      case "warn": return "#FFB84D";
-      case "error": return "#FF6C6C";
-      default: return "#4b5563";
-    }
-  };
+  const counts = {};
+  for (const l of logs) counts[l.level] = (counts[l.level] ?? 0) + 1;
 
   return (
     <div style={{
-      background: "#06080e", border: "1px solid #131825", borderRadius: "8px",
-      display: "flex", flexDirection: "column", height: "100%", overflow: "hidden",
+      background: "#06080e", border: "1px solid #131825", borderRadius: "10px",
+      display: "flex", flexDirection: "column", overflow: "hidden",
     }}>
+      {/* Terminal title bar */}
       <div style={{
         padding: "8px 12px", borderBottom: "1px solid #131825",
-        display: "flex", alignItems: "center", gap: "6px",
+        display: "flex", alignItems: "center", gap: "6px", flexShrink: 0,
       }}>
         <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#FF6C6C" }} />
         <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#FFB84D" }} />
         <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#00E5A0" }} />
-        <span style={{ fontSize: "10px", color: "#3b4252", marginLeft: "6px", fontFamily: "'JetBrains Mono',monospace" }}>system.log</span>
+        <span style={{ fontSize: "10px", color: "#3b4252", marginLeft: "6px", fontFamily: "'JetBrains Mono',monospace", flex: 1 }}>
+          system.log — {logs.length} entries
+        </span>
+        {/* Auto-scroll toggle */}
+        <button
+          onClick={() => setAutoScroll((v) => !v)}
+          title={autoScroll ? "Disable auto-scroll" : "Enable auto-scroll"}
+          style={{
+            padding: "2px 7px", borderRadius: "4px", fontSize: "9px", fontWeight: 700,
+            cursor: "pointer", fontFamily: "'Space Grotesk',sans-serif",
+            background: autoScroll ? "rgba(0,229,160,0.1)" : "rgba(255,255,255,0.04)",
+            border: `1px solid ${autoScroll ? "rgba(0,229,160,0.2)" : "#1a1f2e"}`,
+            color: autoScroll ? "#00E5A0" : "#4b5563",
+          }}
+        >
+          ↓ SCROLL
+        </button>
+        {/* Clear */}
+        <button
+          onClick={onClear}
+          style={{
+            padding: "2px 7px", borderRadius: "4px", fontSize: "9px", fontWeight: 700,
+            cursor: "pointer", fontFamily: "'Space Grotesk',sans-serif",
+            background: "rgba(255,108,108,0.06)", border: "1px solid rgba(255,108,108,0.15)",
+            color: "#FF6C6C",
+          }}
+        >
+          CLEAR
+        </button>
       </div>
-      <div ref={scrollRef} style={{
-        flex: 1, overflow: "auto", padding: "8px 10px",
-        fontFamily: "'JetBrains Mono',monospace", fontSize: "10px", lineHeight: "18px",
+
+      {/* Filter bar */}
+      <div style={{
+        display: "flex", gap: "4px", padding: "6px 10px",
+        borderBottom: "1px solid #0c0f17", flexShrink: 0, flexWrap: "wrap",
       }}>
-        {logs.map((log, i) => (
-          <div key={i} style={{ display: "flex", gap: "8px", whiteSpace: "nowrap" }}>
-            <span style={{ color: "#2a3040" }}>{log.time}</span>
-            <span style={{ color: levelColor(log.level), fontWeight: 600, minWidth: "52px" }}>
+        {Object.entries(LEVEL_META).map(([key, meta]) => {
+          const active = filter === key;
+          const cnt = key === "all" ? logs.length : (counts[key] ?? 0);
+          return (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              style={{
+                padding: "2px 8px", borderRadius: "4px", fontSize: "9px", fontWeight: 700,
+                cursor: "pointer", fontFamily: "'JetBrains Mono',monospace",
+                background: active ? `${meta.color}18` : "transparent",
+                border: `1px solid ${active ? meta.color + "55" : "#1a1f2e"}`,
+                color: active ? meta.color : "#3b4252",
+                display: "flex", alignItems: "center", gap: "4px",
+              }}
+            >
+              {meta.label}
+              <span style={{
+                fontSize: "8px", padding: "0 4px", borderRadius: "3px",
+                background: active ? `${meta.color}22` : "#0c0f17",
+                color: active ? meta.color : "#2a3040",
+              }}>{cnt}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Log lines */}
+      <div
+        ref={scrollRef}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
+          if (!atBottom && autoScroll) setAutoScroll(false);
+        }}
+        style={{
+          flex: 1, overflow: "auto", padding: "8px 10px",
+          fontFamily: "'JetBrains Mono',monospace", fontSize: "10px", lineHeight: "18px",
+          minHeight: "120px",
+        }}
+      >
+        {filtered.length === 0 && (
+          <div style={{ color: "#2a3040", textAlign: "center", paddingTop: "16px" }}>No entries for this filter</div>
+        )}
+        {filtered.map((log, i) => (
+          <div key={i} style={{ display: "flex", gap: "8px" }}>
+            <span style={{ color: "#2a3040", flexShrink: 0 }}>{log.time}</span>
+            <span style={{
+              color: levelColor(log.level), fontWeight: 600,
+              minWidth: "58px", flexShrink: 0,
+            }}>
               [{log.level.toUpperCase()}]
             </span>
-            <span style={{ color: "#9ca3af", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{log.msg}</span>
+            <span style={{ color: "#9ca3af", wordBreak: "break-all" }}>{log.msg}</span>
           </div>
         ))}
       </div>
@@ -175,9 +262,8 @@ function UserRow({ user, onBan, onCancelOrder }) {
         onMouseEnter={(e) => { e.currentTarget.style.background = "#0c1018"; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = "#0a0d14"; }}
       >
-        {/* Status dot */}
         <div style={{
-          width: "6px", height: "6px", borderRadius: "50%", marginRight: "8px",
+          width: "6px", height: "6px", borderRadius: "50%", marginRight: "8px", flexShrink: 0,
           background: user.status === "Active" ? "#00E5A0" : "#FF6C6C",
         }} />
 
@@ -220,9 +306,7 @@ function UserRow({ user, onBan, onCancelOrder }) {
         <div style={{
           padding: "10px 12px", background: "#080a12",
           border: "1px solid #131825", borderTop: "none", borderRadius: "0 0 6px 6px",
-          animation: "fadeSlideDown 0.2s ease-out",
         }}>
-          {/* Action buttons */}
           <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
             <button
               onClick={(e) => { e.stopPropagation(); onBan(user.id); }}
@@ -238,7 +322,6 @@ function UserRow({ user, onBan, onCancelOrder }) {
             </button>
           </div>
 
-          {/* Open Orders */}
           {openOrders.length > 0 && (
             <div style={{ marginBottom: "8px" }}>
               <div style={{ fontSize: "8px", color: "#3b4252", letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: "4px", fontWeight: 600 }}>
@@ -272,7 +355,6 @@ function UserRow({ user, onBan, onCancelOrder }) {
             </div>
           )}
 
-          {/* Filled / Closed Orders */}
           {filledOrders.length > 0 && (
             <div>
               <div style={{ fontSize: "8px", color: "#3b4252", letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: "4px", fontWeight: 600 }}>
@@ -313,7 +395,6 @@ export default function AdminPanel() {
   const [users, setUsers] = useState(MOCK_USERS);
   const [search, setSearch] = useState("");
 
-  // Simulate live log entries
   useEffect(() => {
     if (!wsState) return;
     const iv = setInterval(() => {
@@ -322,17 +403,19 @@ export default function AdminPanel() {
     return () => clearInterval(iv);
   }, [wsState]);
 
+  const addLog = (entries) => {
+    const now = new Date();
+    const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+    setLogs((prev) => [...prev, ...entries.map((e) => ({ time, ...e }))]);
+  };
+
   const toggleBan = (userId) => {
+    const user = users.find((u) => u.id === userId);
     setUsers((prev) => prev.map((u) =>
       u.id === userId ? { ...u, status: u.status === "Active" ? "Banned" : "Active" } : u
     ));
-    setLogs((prev) => {
-      const user = users.find((u) => u.id === userId);
-      const now = new Date();
-      const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
-      const action = user?.status === "Active" ? "BANNED" : "UNBANNED";
-      return [...prev, { time, level: "warn", msg: `User ${action}: ${user?.username}` }];
-    });
+    const action = user?.status === "Active" ? "BANNED" : "UNBANNED";
+    addLog([{ level: "warn", msg: `User ${action}: ${user?.username}` }]);
   };
 
   const cancelOrder = (userId, orderId) => {
@@ -341,38 +424,26 @@ export default function AdminPanel() {
         ? { ...u, orders: u.orders.map((o) => o.id === orderId ? { ...o, status: "CANCELLED" } : o) }
         : u
     ));
-    setLogs((prev) => {
-      const now = new Date();
-      const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
-      return [...prev, { time, level: "order", msg: `ORDER CANCELLED (admin): ${orderId}` }];
-    });
+    addLog([{ level: "order", msg: `ORDER CANCELLED (admin): ${orderId}` }]);
   };
 
   const handleResetDb = () => {
-    setLogs((prev) => {
-      const now = new Date();
-      const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
-      return [
-        ...prev,
-        { time, level: "warn", msg: "Database reset initiated by admin" },
-        { time, level: "info", msg: "Truncating tables: client_orders, client_positions, client_cash..." },
-        { time, level: "info", msg: "Re-seeding initial portfolio data..." },
-        { time, level: "info", msg: "Database reset complete" },
-      ];
-    });
+    addLog([
+      { level: "warn", msg: "Database reset initiated by admin" },
+      { level: "info", msg: "Truncating tables: client_orders, client_positions, client_cash..." },
+      { level: "info", msg: "Re-seeding initial portfolio data..." },
+      { level: "info", msg: "Database reset complete" },
+    ]);
   };
 
   const handleWsToggle = (on) => {
     setWsState(on);
-    const now = new Date();
-    const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
     if (on) {
-      setLogs((prev) => [...prev, { time, level: "connect", msg: "WebSocket server started on ws://localhost:8080" }]);
+      addLog([{ level: "connect", msg: "WebSocket server started on ws://localhost:8080" }]);
     } else {
-      setLogs((prev) => [
-        ...prev,
-        { time, level: "warn", msg: "WebSocket server shutting down..." },
-        { time, level: "error", msg: "WebSocket server stopped — all clients disconnected" },
+      addLog([
+        { level: "warn", msg: "WebSocket server shutting down..." },
+        { level: "error", msg: "WebSocket server stopped — all clients disconnected" },
       ]);
     }
   };
@@ -386,36 +457,35 @@ export default function AdminPanel() {
 
   return (
     <div style={{
-      flex: 1, display: "flex", flexDirection: "column", gap: "6px", padding: "6px",
-      minHeight: 0, overflow: "hidden",
+      width: "100%", display: "flex", flexDirection: "column", gap: "8px", padding: "8px",
+      overflowY: "auto", overflowX: "hidden",
     }}>
-      {/* Top: Controls + Log */}
-      <div style={{ display: "flex", gap: "6px", height: "240px", flexShrink: 0 }}>
-        {/* System Controls */}
-        <div style={{
-          width: "320px", flexShrink: 0, background: "#0c0f17", border: "1px solid #131825",
-          borderRadius: "10px", padding: "14px", display: "flex", flexDirection: "column", gap: "12px",
-        }}>
-          <div style={{ fontSize: "12px", fontWeight: 800, color: "#6b7280", letterSpacing: "0.8px", textTransform: "uppercase", fontFamily: "'Space Grotesk',sans-serif" }}>
-            System Controls
-          </div>
 
-          {/* WebSocket Status */}
+      {/* 1. System Controls */}
+      <div style={{
+        background: "#0c0f17", border: "1px solid #131825",
+        borderRadius: "10px", padding: "14px", flexShrink: 0,
+      }}>
+        <div style={{ fontSize: "12px", fontWeight: 800, color: "#6b7280", letterSpacing: "0.8px", textTransform: "uppercase", fontFamily: "'Space Grotesk',sans-serif", marginBottom: "12px" }}>
+          System Controls
+        </div>
+
+        <div style={{ display: "flex", gap: "12px", alignItems: "flex-start", flexWrap: "wrap" }}>
+          {/* WS Status */}
           <div style={{
             display: "flex", alignItems: "center", gap: "8px", padding: "8px 10px",
-            background: "#0a0d14", borderRadius: "6px", border: "1px solid #131825",
+            background: "#0a0d14", borderRadius: "6px", border: "1px solid #131825", flexShrink: 0,
           }}>
             <div style={{
               width: "8px", height: "8px", borderRadius: "50%",
               background: wsState ? "#00E5A0" : "#FF6C6C",
               boxShadow: wsState ? "0 0 8px rgba(0,229,160,0.4)" : "0 0 8px rgba(255,108,108,0.4)",
-              animation: wsState ? "livePulse 2s infinite" : "none",
             }} />
             <span style={{ fontSize: "11px", fontWeight: 700, color: "#e5e7eb", fontFamily: "'Space Grotesk',sans-serif" }}>
               WebSocket
             </span>
             <span style={{
-              fontSize: "9px", fontWeight: 700, marginLeft: "auto",
+              fontSize: "9px", fontWeight: 700, marginLeft: "4px",
               color: wsState ? "#00E5A0" : "#FF6C6C",
               fontFamily: "'JetBrains Mono',monospace",
             }}>
@@ -423,16 +493,15 @@ export default function AdminPanel() {
             </span>
           </div>
 
-          {/* Buttons */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          {/* Action buttons in a row */}
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", flex: 1 }}>
             <button onClick={handleResetDb} style={{
               padding: "8px 14px", borderRadius: "6px", fontSize: "11px", fontWeight: 700,
               cursor: "pointer", fontFamily: "'Space Grotesk',sans-serif",
               background: "rgba(255,184,77,0.08)", border: "1px solid rgba(255,184,77,0.2)",
-              color: "#FFB84D", width: "100%", textAlign: "left",
-              display: "flex", alignItems: "center", gap: "6px",
+              color: "#FFB84D", display: "flex", alignItems: "center", gap: "6px",
             }}>
-              <span style={{ fontSize: "13px" }}>↻</span> Reset Database
+              <span>↻</span> Reset DB
             </button>
 
             <button onClick={() => handleWsToggle(true)} disabled={wsState} style={{
@@ -440,11 +509,10 @@ export default function AdminPanel() {
               cursor: wsState ? "not-allowed" : "pointer", fontFamily: "'Space Grotesk',sans-serif",
               background: wsState ? "rgba(0,229,160,0.03)" : "rgba(0,229,160,0.08)",
               border: `1px solid rgba(0,229,160,${wsState ? "0.08" : "0.2"})`,
-              color: "#00E5A0", width: "100%", textAlign: "left",
-              opacity: wsState ? 0.4 : 1,
+              color: "#00E5A0", opacity: wsState ? 0.4 : 1,
               display: "flex", alignItems: "center", gap: "6px",
             }}>
-              <span style={{ fontSize: "13px" }}>▶</span> Turn On WebSocket
+              <span>▶</span> Start WS
             </button>
 
             <button onClick={() => handleWsToggle(false)} disabled={!wsState} style={{
@@ -452,25 +520,24 @@ export default function AdminPanel() {
               cursor: !wsState ? "not-allowed" : "pointer", fontFamily: "'Space Grotesk',sans-serif",
               background: !wsState ? "rgba(255,108,108,0.03)" : "rgba(255,108,108,0.08)",
               border: `1px solid rgba(255,108,108,${!wsState ? "0.08" : "0.2"})`,
-              color: "#FF6C6C", width: "100%", textAlign: "left",
-              opacity: !wsState ? 0.4 : 1,
+              color: "#FF6C6C", opacity: !wsState ? 0.4 : 1,
               display: "flex", alignItems: "center", gap: "6px",
             }}>
-              <span style={{ fontSize: "13px" }}>■</span> Close WebSocket
+              <span>■</span> Stop WS
             </button>
           </div>
 
           {/* Stats */}
-          <div style={{ display: "flex", gap: "8px", marginTop: "auto" }}>
+          <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
             <div style={{
-              flex: 1, padding: "6px 8px", background: "#0a0d14", borderRadius: "4px",
+              padding: "6px 14px", background: "#0a0d14", borderRadius: "4px",
               border: "1px solid #131825", textAlign: "center",
             }}>
               <div style={{ fontSize: "16px", fontWeight: 800, color: "#00E5A0", fontFamily: "'JetBrains Mono',monospace" }}>{activeCount}</div>
               <div style={{ fontSize: "7px", color: "#3b4252", letterSpacing: "0.5px", textTransform: "uppercase" }}>Active</div>
             </div>
             <div style={{
-              flex: 1, padding: "6px 8px", background: "#0a0d14", borderRadius: "4px",
+              padding: "6px 14px", background: "#0a0d14", borderRadius: "4px",
               border: "1px solid #131825", textAlign: "center",
             }}>
               <div style={{ fontSize: "16px", fontWeight: 800, color: "#FF6C6C", fontFamily: "'JetBrains Mono',monospace" }}>{bannedCount}</div>
@@ -478,18 +545,18 @@ export default function AdminPanel() {
             </div>
           </div>
         </div>
-
-        {/* Log Panel */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <LogPanel logs={logs} />
-        </div>
       </div>
 
-      {/* Bottom: User Management */}
+      {/* 2. Log Panel */}
+      <div style={{ flexShrink: 0, minHeight: "220px" }}>
+        <LogPanel logs={logs} onClear={() => setLogs([])} />
+      </div>
+
+      {/* 3. User Management */}
       <div style={{
-        flex: 1, minHeight: 0, background: "#0c0f17", border: "1px solid #131825",
+        background: "#0c0f17", border: "1px solid #131825",
         borderRadius: "10px", padding: "14px", display: "flex", flexDirection: "column",
-        overflow: "hidden",
+        flexShrink: 0,
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
           <div style={{ fontSize: "12px", fontWeight: 800, color: "#6b7280", letterSpacing: "0.8px", textTransform: "uppercase", fontFamily: "'Space Grotesk',sans-serif" }}>
@@ -500,7 +567,6 @@ export default function AdminPanel() {
           </span>
         </div>
 
-        {/* Search */}
         <div style={{ marginBottom: "8px" }}>
           <input
             type="text"
@@ -511,13 +577,12 @@ export default function AdminPanel() {
               width: "100%", padding: "7px 10px", borderRadius: "6px",
               background: "#0a0d14", border: "1px solid #1a1f2e", color: "#e5e7eb",
               fontSize: "11px", fontFamily: "'Space Grotesk',sans-serif",
-              outline: "none",
+              outline: "none", boxSizing: "border-box",
             }}
           />
         </div>
 
-        {/* User list */}
-        <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
+        <div>
           {filteredUsers.map((user) => (
             <UserRow key={user.id} user={user} onBan={toggleBan} onCancelOrder={cancelOrder} />
           ))}

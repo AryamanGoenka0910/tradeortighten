@@ -134,7 +134,6 @@ DATABASE_URL=postgres://user:pass@host:5432/db
 - Send delta events instead of full order book snapshots
 - Batch outbound WS updates (20–50ms) during traffic spikes
 - Prevent self-matching (client can't fill own orders) [TEST]
-- Fix modified order priority in C++ engine
 - Clean up phantom price levels in order book iterator
 
 ## Testing & Validation

@@ -59,15 +59,20 @@ export const handleInitialLoad = async (
     clientId: message.clientId,
   });
 
-  sendToClient(message.clientId, {
-    type: "order_book_update",
-    clientId: message.clientId,
-    orderBook: {
-      bids: initialLoadRes.all_bids,
-      asks: initialLoadRes.all_asks,
-    },
-    seq: Number(clientRow.last_seq),
-  });
+  // Send one order_book_update per asset so each quadrant initialises correctly
+  const books = initialLoadRes.books ?? {};
+  for (const [assetIdStr, bookData] of Object.entries(books)) {
+    sendToClient(message.clientId, {
+      type: "order_book_update",
+      clientId: message.clientId,
+      assetId: Number(assetIdStr),
+      orderBook: {
+        bids: bookData.all_bids ?? [],
+        asks: bookData.all_asks ?? [],
+      },
+      seq: Number(clientRow.last_seq),
+    });
+  }
 
   console.log("Initial load sent to: ", clientRow.client_id);
   console.log("User Last Seq: ", clientRow.last_seq);

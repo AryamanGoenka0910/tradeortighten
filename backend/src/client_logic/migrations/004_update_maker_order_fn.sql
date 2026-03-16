@@ -16,7 +16,11 @@ returns table (
   original_qty int4,
   current_qty int4,
   status text,
-  asset int2
+  asset int2,
+  positions_available int4,
+  positions_reserved int4,
+  cash_available int4,
+  cash_reserved int4
 )
 language plpgsql
 as $$
@@ -26,6 +30,8 @@ declare
   v_trade_value int4;
   v_next_qty int4;
   v_next_status text;
+  v_positions record;
+  v_cash record;
 begin
   -- Load and lock the maker order.
   select
@@ -57,29 +63,37 @@ begin
 
   -- Portfolio settlement for this maker fill.
   if v_existing.side = 'buy' then
-    update trade_or_tighten.client_cash cp
+    update trade_or_tighten.client_cash cc
     set
-      cash_available = cash_available - v_trade_value,
-      cash_reserved = cash_reserved - (v_existing.price * v_fill_qty)
-    where cp.client_id = p_client_id;
+      cash_available = cc.cash_available - v_trade_value,
+      cash_reserved = cc.cash_reserved - (v_existing.price * v_fill_qty)
+    where cc.client_id = p_client_id
+    returning cc.cash_available, cc.cash_reserved
+    into v_cash;
 
     update trade_or_tighten.client_positions cp
     set
       available = available + v_fill_qty
     where cp.client_id = p_client_id
-      and cp.asset_id = p_asset;
+      and cp.asset_id = p_asset
+    returning available, reserved
+    into v_positions;
   else
-    update trade_or_tighten.client_positions cp
+    update trade_or_tighten.client_positions cc
     set
-      available = available - v_fill_qty,
-      reserved = reserved - v_fill_qty
-    where cp.client_id = p_client_id
-      and cp.asset_id = p_asset;
+      available = cc.available - v_fill_qty,
+      reserved = cc.reserved - v_fill_qty
+    where cc.client_id = p_client_id
+      and cc.asset_id = p_asset
+    returning available, reserved
+    into v_positions;
 
     update trade_or_tighten.client_cash cp
     set
       cash_available = cash_available + v_trade_value
-    where cp.client_id = p_client_id;
+    where cp.client_id = p_client_id
+    returning cp.cash_available, cp.cash_reserved
+    into v_cash;
   end if;
 
   -- Order state update after fill.
@@ -114,7 +128,11 @@ begin
     v_existing.original_qty,
     v_existing.current_qty,
     v_existing.status,
-    v_existing.asset;
+    v_existing.asset,
+    v_positions.available,
+    v_positions.reserved,
+    v_cash.cash_available,
+    v_cash.cash_reserved;
 end;
 $$;
 

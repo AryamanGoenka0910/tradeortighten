@@ -34,14 +34,14 @@ function OrderBook({ bids, asks }) {
   const maxQty = Math.max(...bids.map((b) => b.qty), ...asks.map((a) => a.qty));
   const Row = ({ items, isBid }) => (
     <div style={{ flex: 1 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr auto", padding: "1px 4px", color: "#4b5563", fontSize: "8px", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "1px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto", padding: "1px 4px", color: "#4b5563", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "1px" }}>
         <span>{isBid ? "Bid" : "Ask"}</span>
         <span style={{ textAlign: "right" }}>Qty</span>
       </div>
       {items.map((item, i) => (
-        <div key={i} style={{ position: "relative", display: "grid", gridTemplateColumns: "1fr auto", alignItems: "center", padding: "1px 4px", fontSize: "10px", fontFamily: "'JetBrains Mono',monospace", lineHeight: "1.5" }}>
+        <div key={i} style={{ position: "relative", display: "grid", gridTemplateColumns: "1fr auto", alignItems: "center", padding: "1px 4px", fontSize: "11px", fontFamily: "'JetBrains Mono',monospace", lineHeight: "1.5" }}>
           <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(item.qty / maxQty) * 100}%`, background: isBid ? "rgba(0,229,160,0.06)" : "rgba(255,108,108,0.06)", borderRadius: "1px" }} />
-          <span style={{ color: isBid ? "#00E5A0" : "#FF6C6C", fontWeight: 600, position: "relative" }}>{item.price.toFixed(1)}</span>
+          <span style={{ color: isBid ? "#00E5A0" : "#FF6C6C", fontWeight: 600, position: "relative" }}>{item.price}</span>
           <span style={{ color: "#6b7280", position: "relative", textAlign: "right" }}>{item.qty}</span>
         </div>
       ))}
@@ -61,17 +61,49 @@ function InlineOrderEntry({ security, onSubmit }) {
   const [side, setSide] = useState("BID");
   const [price, setPrice] = useState("");
   const [qty, setQty] = useState("");
+
   const [flash, setFlash] = useState(null);
+  const [errorMsg, setErrorMsg] = useState("");
 
   const handleOrder = () => {
     if (!price || !qty) return;
+
+    if (parseInt(price) <= 0 || parseInt(qty, 10) <= 0) {
+      setErrorMsg("Price and quantity must be positive");
+      setPrice(""); 
+      setQty("");
+      setTimeout(() => { setErrorMsg(""); }, 1000);
+      return;
+    }
+
+    if (!Number.isInteger(Number(price)) || !Number.isInteger(Number(qty))) {
+      setErrorMsg("Price and quantity must be integers");
+      setPrice(""); 
+      setQty("");
+      setTimeout(() => { setErrorMsg(""); }, 1000);
+      return;
+    };
+
     setFlash(side);
-    onSubmit({ ticker: security.ticker, side, price: parseFloat(price), qty: parseInt(qty, 10) });
+    onSubmit({ ticker: security.ticker, side, price: parseInt(price), qty: parseInt(qty, 10) });
     setTimeout(() => { setFlash(null); setPrice(""); setQty(""); }, 600);
   };
 
   const isBid = side === "BID";
   const accent = isBid ? "#00E5A0" : "#FF6C6C";
+
+  if (errorMsg) {
+    return (
+      <div style={{
+        display: "flex", alignItems: "center", gap: "6px", padding: "10px 0 0 0",
+        borderTop: "1px solid #131825",
+        minHeight: "56px",
+        color: `${accent}80`, fontSize: "11px", fontFamily: "'JetBrains Mono',monospace",
+      }}>
+        {errorMsg}
+      </div>
+    )
+  }
 
   return (
     <div style={{
@@ -119,12 +151,20 @@ function InlineOrderEntry({ security, onSubmit }) {
 
       <button
         onClick={handleOrder}
+        disabled={!price || !qty}
         style={{
-          padding: "12px 12px", borderRadius: "4px", border: "none", cursor: "pointer",
-          fontSize: "9px", fontWeight: 800, letterSpacing: "0.3px", flexShrink: 0,
-          background: flash ? accent : `${accent}18`,
-          color: flash ? "#0a0d14" : accent,
+          padding: "12px 12px", borderRadius: "4px", border: "none", flexShrink: 0,
+          fontSize: "9px", fontWeight: 800, letterSpacing: "0.3px",
           transition: "all 0.15s",
+          ...(!price || !qty ? {
+            background: `${accent}10`,
+            color: `${accent}80`,
+            cursor: "not-allowed",
+          } : {
+            background: flash ? accent : `${accent}18`,
+            color: flash ? "#0a0d14" : accent,
+            cursor: "pointer",
+          })
         }}
       >
         {flash ? "✓" : "ORDER"}
@@ -133,15 +173,13 @@ function InlineOrderEntry({ security, onSubmit }) {
   );
 }
 
-export default function SecurityQuadrant({ security, orderBook, onOrder }) {
-  const isPos = security.change >= 0;
+export default function SecurityQuadrant({ viewToggle, security, orderBook, onOrder }) {
   
-  const bids = orderBook?.bids ?? [];
-  const asks = orderBook?.asks ?? [];
+  const bids = (orderBook?.bids ?? []).filter((b) => b.qty > 0);
+  const asks = (orderBook?.asks ?? []).filter((a) => a.qty > 0);
   const bestBid = bids.length ? bids[0].price : null;
   const bestAsk = asks.length ? asks[asks.length - 1].price : null;
   const currentPrice = bestBid != null && bestAsk != null ? (bestBid + bestAsk) / 2 : 50;
-
 
   return (
     <div style={{
@@ -159,21 +197,22 @@ export default function SecurityQuadrant({ security, orderBook, onOrder }) {
           <span style={{ fontSize: "15px", fontWeight: 800, color: "#e5e7eb", fontFamily: "'JetBrains Mono',monospace", letterSpacing: "-0.5px" }}>
             {currentPrice}
           </span>
-          {/* <span style={{ fontSize: "9px", fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: isPos ? "#00E5A0" : "#FF6C6C" }}>
-            {isPos ? "+" : ""}{security.change.toFixed(1)}
-          </span> */}
         </div>
       </div>
 
-      {/* <SparkChart data={security.history} color={security.color} height={74} /> */}
-
+      {/* {viewToggle &&
+        <SparkChart data={security.history} color={security.color} height={74} />
+      } */}
+      
       <div style={{ minHeight: 0, overflow: "auto" }}>
-        <OrderBook bids={orderBook.bids} asks={orderBook.asks.reverse()} />
+        <OrderBook bids={bids} asks={asks.slice().reverse()} />
       </div>
 
-      <div style={{ marginTop: "auto" }}>
-        <InlineOrderEntry security={security} onSubmit={onOrder} />
-      </div>
+      {!viewToggle &&
+        <div style={{ marginTop: "auto" }}>
+          <InlineOrderEntry security={security} onSubmit={onOrder} />
+        </div>
+      }
     </div>
   );
 }
