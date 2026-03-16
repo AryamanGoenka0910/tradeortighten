@@ -209,8 +209,8 @@ export default function TradePage() {
       setClientId(user.id);
       setClientName(resolvedClientName);
 
-      //socket = new WebSocket("wss://ary-credit.ngrok.app");
-      socket = new WebSocket("ws://localhost:8080");
+      socket = new WebSocket("wss://ary-credit.ngrok.app");
+      // socket = new WebSocket("ws://localhost:8080");
       wsRef.current = socket;
 
       socket.onopen = () => {
