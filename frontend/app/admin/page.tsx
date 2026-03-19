@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useBackendStatus } from "@/lib/useBackendStatus";
-import AdminPanel from "../trade/components/AdminPanel";
+import AdminPanel from "./AdminPanel";
 
 export default function AdminPage() {
   const router = useRouter();

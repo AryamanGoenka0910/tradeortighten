@@ -1,5 +1,4 @@
-export default function PortfolioPanel({ portfolio, orders }) {
-  // console.log(portfolio);
+export default function PortfolioPanel({ portfolio, orders, midPrices = {} }) {
   const cash = Number(portfolio?.cashAvailable ?? 0);
   const cashReserved = Number(portfolio?.cashReserved ?? 0);
   const pos = portfolio?.positions ?? {};
@@ -16,28 +15,28 @@ export default function PortfolioPanel({ portfolio, orders }) {
       ticker: "ALPHA",
       qty: pos[1]?.available ?? 0,
       reserved: pos[1]?.reserved ?? 0,
-      price: 50,
+      price: midPrices[1] ?? 50,
       isCash: false,
     },
     "BETA": {
       ticker: "BETA",
       qty: pos[2]?.available ?? 0,
       reserved: pos[2]?.reserved ?? 0,
-      price: 50,
+      price: midPrices[2] ?? 50,
       isCash: false,
     },
     "GAMMA": {
       ticker: "GAMMA",
       qty: pos[3]?.available ?? 0,
       reserved: pos[3]?.reserved ?? 0,
-      price: 50,
+      price: midPrices[3] ?? 50,
       isCash: false,
     },
     "DELTA": {
       ticker: "DELTA",
       qty: pos[4]?.available ?? 0,
       reserved: pos[4]?.reserved ?? 0,
-      price: 50,
+      price: midPrices[4] ?? 50,
       isCash: false,
     },
   }
@@ -53,8 +52,6 @@ export default function PortfolioPanel({ portfolio, orders }) {
   }
 
   const portfolioValue = Object.values(securities).map((s) => (s.price * s.qty)).reduce((a, b) => a + b, 0);
-  const uPnl = (150000 - portfolioValue);
-
 
   return (
     <div style={{
@@ -62,21 +59,11 @@ export default function PortfolioPanel({ portfolio, orders }) {
       padding: "12px 14px", display: "flex", flexDirection: "column", gap: "2px",
       minHeight: 0, overflow: "hidden", width: "100%",
     }}>
-      <div style={{ fontSize: "16px", fontWeight: 800, color: "#6b7280", letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: "2px", fontFamily: "'Space Grotesk',sans-serif" }}>
-        Portfolio
-      </div>
-
-      <div style={{ height: "1px", background: "#131825", margin: "4px 0", fontSize: "14px"}} />
-
-      <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "14px" }}>
-        <span style={{ color: "#4b5563" }}>Portfolio Value</span>
+      <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "14px" }}>
+        <div style={{ fontSize: "16px", fontWeight: 800, color: "#6b7280", letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: "2px", fontFamily: "'Space Grotesk',sans-serif" }}>
+          Portfolio Value
+        </div>
         <span style={{ fontWeight: 700, color: "#e5e7eb", fontFamily: "'JetBrains Mono',monospace" }}>${portfolioValue.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "14px" }}>
-        <span style={{ color: "#4b5563" }}>Unrealized P&L</span>
-        <span style={{ fontWeight: 700, color: uPnl >= 0 ? "#00E5A0" : "#FF6C6C", fontFamily: "'JetBrains Mono',monospace" }}>
-          {uPnl >= 0 ? "+" : ""}${uPnl.toFixed(2)}
-        </span>
       </div>
 
       <div style={{ height: "1px", background: "#131825", margin: "6px 0 4px 0" }} />

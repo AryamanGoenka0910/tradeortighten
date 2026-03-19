@@ -36,3 +36,8 @@ create table if not exists trade_or_tighten.client_orders (
 
 create unique index if not exists client_orders_client_id_client_order_id_key
   on trade_or_tighten.client_orders (client_id, client_order_id);
+
+-- Partial index for open-order queries (self-match check, get_client_open_orders)
+create index if not exists client_orders_open_idx
+  on trade_or_tighten.client_orders (client_id, asset, side, price)
+  where status in ('pending', 'partially_filled');

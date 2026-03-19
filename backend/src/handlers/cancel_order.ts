@@ -2,6 +2,7 @@ import { pool } from "../db.js";
 import type { EngineBridge } from "../order_book_engine/bridge_engine.js";
 import { rowToOrderState, rowToPortfolio } from "../lib/order_utils.js";
 import { sendToClient, broadcastOrderBook } from "../lib/connection_manager.js";
+import { tradingEnabled } from "../lib/trading_state.js";
 
 type CancelMessage = {
   clientId: string;
@@ -14,7 +15,19 @@ export const handleCancel = async (
   message: CancelMessage,
   bridge: EngineBridge
 ): Promise<void> => {
+  if (!tradingEnabled) {
+    return;
+  }
+
   console.log("Cancelling order: ", message);
+
+  // Cancel in engine (targets the right asset book)
+  const res = await bridge.request({
+    op: "cancel",
+    clientId: message.clientId,
+    orderId: message.orderId,
+    assetId: message.assetId,
+  });
 
   let cancelOrder;
   try {
@@ -33,14 +46,6 @@ export const handleCancel = async (
     });
     return;
   }
-
-  // Cancel in engine (targets the right asset book)
-  const res = await bridge.request({
-    op: "cancel",
-    clientId: message.clientId,
-    orderId: message.orderId,
-    assetId: message.assetId,
-  });
 
   // Query updated portfolio for the affected asset
   let portfolio;

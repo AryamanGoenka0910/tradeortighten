@@ -2,6 +2,7 @@ import { pool } from "../db.js";
 import type { EngineBridge } from "../order_book_engine/bridge_engine.js";
 import { rowToOrderState, rowToPortfolio, deriveOrderStatus } from "../lib/order_utils.js";
 import { sendToClient, broadcastOrderBook } from "../lib/connection_manager.js";
+import { tradingEnabled } from "../lib/trading_state.js";
 
 type PlaceMessage = {
   type: "place";
@@ -19,7 +20,12 @@ export const handlePlace = async (
   submittedToEngine: Set<string>,
   bridge: EngineBridge
 ): Promise<void> => {
-  console.log("Placing order: ", message);
+
+  if (!tradingEnabled) {
+    return;
+  }
+
+   console.log("Placing order: ", message);
 
   // 1. Pre-flight DB check
   let pre;
@@ -84,7 +90,7 @@ export const handlePlace = async (
   const res = await bridge.request({
     op: "place",
     clientId: message.clientId,
-    asset: message.asset,
+    assetId: message.asset,
     side: message.side,
     price: message.price,
     qty: message.qty,
@@ -142,25 +148,16 @@ export const handlePlace = async (
     return;
   }
 
-  // 6. Update each maker in DB
-  for (const trade of res.trades) {
-    console.log("Processing trade: ", trade);
+  // 6. Update each maker in DB (parallel)
+  await Promise.all(res.trades.map(async (trade) => {
     const makerClientId = trade.maker_client_id;
     const makerOrderId = Number(trade.maker_order_id);
-
     try {
       const { rows } = await pool.query(
         "select * from trade_or_tighten.update_maker_order($1,$2,$3,$4,$5)",
-        [
-          makerClientId,
-          makerOrderId,
-          trade.price,
-          trade.qty,
-          message.asset,
-        ]
+        [makerClientId, makerOrderId, trade.price, trade.qty, message.asset]
       );
       const postMaker = rows[0];
-
       sendToClient(makerClientId, {
         type: "order_update_snapshot",
         clientId: makerClientId,
@@ -168,13 +165,11 @@ export const handlePlace = async (
         order: rowToOrderState(postMaker),
         portfolio: rowToPortfolio(postMaker, message.asset),
       });
-      
       console.log(`Maker order ${makerOrderId} updated for client ${makerClientId}: `, postMaker);
     } catch (e) {
       console.error(`Error updating maker order ${makerOrderId} for client ${makerClientId}: `, e);
-      continue;
     }
-  }
+  }));
 
   // 7. Broadcast updated order book to all clients
   broadcastOrderBook(res.all_bids, res.all_asks, message.asset, message.seq);

@@ -1,7 +1,7 @@
 "use client";
 
 function LeaderboardRow({ entry }) {
-  const pnl = entry.pnl ?? 0;
+  const value = entry.portfolioValue ?? 0;
   return (
     <div
       style={{
@@ -24,8 +24,8 @@ function LeaderboardRow({ entry }) {
           {entry.clientName}
         </div>
       </div>
-      <div style={{ fontSize: "12px", fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: pnl >= 0 ? "#00E5A0" : "#FF6C6C" }}>
-        {pnl >= 0 ? "+" : ""}{pnl.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+      <div style={{ fontSize: "12px", fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: "#e5e7eb" }}>
+        ${value.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
       </div>
     </div>
   );
@@ -57,7 +57,7 @@ export default function LeaderboardPanel({ leaderboard }) {
       }}>
         <div style={{ width: "36px" }}>#</div>
         <div style={{ flex: 1 }}>Team</div>
-        <div>P&L</div>
+        <div>Value</div>
       </div>
 
       {/* Entries */}

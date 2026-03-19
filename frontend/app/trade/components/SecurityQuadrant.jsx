@@ -2,18 +2,24 @@ import { useState } from "react";
 
 function SparkChart({ data, color, height }) {
   const w = 200;
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
   const p = 3;
   const eH = height - p * 2;
   const eW = w - p * 2;
+
+  if (!data || data.length < 2) {
+    return <svg width="100%" height={height} viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="none" />;
+  }
+
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
   const pts = data.map((v, i) => {
     const x = p + (i / (data.length - 1)) * eW;
     const y = p + eH - ((v - min) / range) * eH;
     return `${x},${y}`;
   });
   const area = [`${p},${height - p}`, ...pts, `${p + eW},${height - p}`].join(" ");
+  const last = pts[pts.length - 1].split(",");
 
   return (
     <svg width="100%" height={height} viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="none">
@@ -25,7 +31,7 @@ function SparkChart({ data, color, height }) {
       </defs>
       <polygon points={area} fill={`url(#g-${color.replace("#", "")})`} />
       <polyline points={pts.join(" ")} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={pts[pts.length - 1].split(",")[0]} cy={pts[pts.length - 1].split(",")[1]} r="2.5" fill={color} />
+      <circle cx={last[0]} cy={last[1]} r="2.5" fill={color} />
     </svg>
   );
 }
@@ -34,12 +40,12 @@ function OrderBook({ bids, asks }) {
   const maxQty = Math.max(...bids.map((b) => b.qty), ...asks.map((a) => a.qty));
   const Row = ({ items, isBid }) => (
     <div style={{ flex: 1 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr auto", padding: "1px 4px", color: "#4b5563", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "1px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto", padding: "1px 4px", color: "#4b5563", fontSize: "14px", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "1px" }}>
         <span>{isBid ? "Bid" : "Ask"}</span>
         <span style={{ textAlign: "right" }}>Qty</span>
       </div>
       {items.map((item, i) => (
-        <div key={i} style={{ position: "relative", display: "grid", gridTemplateColumns: "1fr auto", alignItems: "center", padding: "1px 4px", fontSize: "11px", fontFamily: "'JetBrains Mono',monospace", lineHeight: "1.5" }}>
+        <div key={i} style={{ position: "relative", display: "grid", gridTemplateColumns: "1fr auto", alignItems: "center", padding: "1px 4px", fontSize: "13px", fontFamily: "'JetBrains Mono',monospace", lineHeight: "1.5" }}>
           <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(item.qty / maxQty) * 100}%`, background: isBid ? "rgba(0,229,160,0.06)" : "rgba(255,108,108,0.06)", borderRadius: "1px" }} />
           <span style={{ color: isBid ? "#00E5A0" : "#FF6C6C", fontWeight: 600, position: "relative" }}>{item.price}</span>
           <span style={{ color: "#6b7280", position: "relative", textAlign: "right" }}>{item.qty}</span>
@@ -50,7 +56,7 @@ function OrderBook({ bids, asks }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-      <Row items={asks.slice().reverse()} isBid={false} />
+      <Row items={asks} isBid={false} />
       <div style={{ height: "1px", background: "#1a1f2e" }} />
       <Row items={bids} isBid={true} />
     </div>
@@ -173,13 +179,12 @@ function InlineOrderEntry({ security, onSubmit }) {
   );
 }
 
-export default function SecurityQuadrant({ viewToggle, security, orderBook, onOrder, rejectionMsg, onDismissRejection }) {
+export default function SecurityQuadrant({ viewToggle, security, orderBook, midPrice, onOrder, rejectionMsg, onDismissRejection }) {
   
+  // console.log("Rendering SecurityQuadrant for", security.ticker, "with orderBook:", orderBook);
   const bids = (orderBook?.bids ?? []).filter((b) => b.qty > 0);
-  const asks = (orderBook?.asks ?? []).filter((a) => a.qty > 0);
-  const bestBid = bids.length ? bids[0].price : null;
-  const bestAsk = asks.length ? asks[asks.length - 1].price : null;
-  const currentPrice = bestBid != null && bestAsk != null ? (bestBid + bestAsk) / 2 : 50;
+  const asks = (orderBook?.asks ?? []).filter((a) => a.qty > 0);  
+  const currentPrice = midPrice;
 
   return (
     <div style={{
@@ -209,18 +214,18 @@ export default function SecurityQuadrant({ viewToggle, security, orderBook, onOr
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: security.color, boxShadow: `0 0 6px ${security.color}40` }} />
-          <span style={{ fontSize: "13px", fontWeight: 800, color: "#e5e7eb", fontFamily: "'Space Grotesk',sans-serif", letterSpacing: "-0.3px" }}>{security.ticker}</span>
+          <span style={{ fontSize: "15px", fontWeight: 800, color: "#e5e7eb", fontFamily: "'Space Grotesk',sans-serif", letterSpacing: "-0.3px" }}>{security.ticker}</span>
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
           <span style={{ fontSize: "15px", fontWeight: 800, color: "#e5e7eb", fontFamily: "'JetBrains Mono',monospace", letterSpacing: "-0.5px" }}>
-            {currentPrice}
+            Current Price: {currentPrice}
           </span>
         </div>
       </div>
 
-      {/* {viewToggle &&
+      {viewToggle &&
         <SparkChart data={security.history} color={security.color} height={74} />
-      } */}
+      }
       
       <div style={{ minHeight: 0, overflow: "auto" }}>
         <OrderBook bids={bids} asks={asks.slice().reverse()} />

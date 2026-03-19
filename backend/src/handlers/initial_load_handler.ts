@@ -1,7 +1,7 @@
 import { pool } from "../db.js";
 import type { EngineBridge } from "../order_book_engine/bridge_engine.js";
 import { rowToOrderState } from "../lib/order_utils.js";
-import { sendToClient } from "../lib/connection_manager.js";
+import { sendToClient, getMidPrices } from "../lib/connection_manager.js";
 
 const STARTING_CASH = 10000;
 const STARTING_ASSET1 = 100;
@@ -61,6 +61,7 @@ export const handleInitialLoad = async (
 
   // Send one order_book_update per asset so each quadrant initialises correctly
   const books = initialLoadRes.books ?? {};
+  const currentMidPrices = getMidPrices();
   for (const [assetIdStr, bookData] of Object.entries(books)) {
     sendToClient(message.clientId, {
       type: "order_book_update",
@@ -70,6 +71,7 @@ export const handleInitialLoad = async (
         bids: bookData.all_bids ?? [],
         asks: bookData.all_asks ?? [],
       },
+      midPrice: currentMidPrices[Number(assetIdStr)] ?? 50,
       seq: Number(clientRow.last_seq),
     });
   }

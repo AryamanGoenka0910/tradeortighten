@@ -7,29 +7,6 @@ import LeaderboardPanel from "../trade/components/LeaderboardPanel";
 import PageHeader from "../trade/components/PageHeader";
 import { SECURITY_META } from "@/lib/securities";
 
-const LEADERBOARD = [
-  { rank: 1, name: "QuantWolf", pnl: 12450.2, trades: 87 },
-  { rank: 2, name: "AlphaSeeker", pnl: 11230.5, trades: 124 },
-  { rank: 3, name: "BayesianBandit", pnl: 9870.0, trades: 63 },
-  { rank: 4, name: "SigmaTrader", pnl: 8540.3, trades: 95 },
-  { rank: 5, name: "MarkovChain", pnl: 7210.8, trades: 78 },
-  { rank: 6, name: "GammaHedge", pnl: 6890.1, trades: 112 },
-  { rank: 7, name: "DeltaForce", pnl: 5430.6, trades: 56 },
-  { rank: 8, name: "ThetaDecay", pnl: 4870.9, trades: 91 },
-  { rank: 9, name: "VegaLong", pnl: 4120.4, trades: 44 },
-  { rank: 10, name: "RhoRunner", pnl: 3560.7, trades: 103 },
-  { rank: 11, name: "KappaFlow", pnl: 2980.2, trades: 67 },
-  { rank: 12, name: "EpsilonEdge", pnl: 2340.0, trades: 82 },
-  { rank: 13, name: "ZetaPrime", pnl: 1890.5, trades: 39 },
-  { rank: 14, name: "EtaVolatil", pnl: 1230.8, trades: 71 },
-  { rank: 15, name: "IotaSpread", pnl: 870.3, trades: 58 },
-  { rank: 16, name: "LambdaCalc", pnl: 540.1, trades: 93 },
-  { rank: 17, name: "MuNeutral", pnl: 210.6, trades: 47 },
-  { rank: 18, name: "NuTrader", pnl: -120.4, trades: 85 },
-  { rank: 19, name: "XiMomentum", pnl: -450.9, trades: 36 },
-  { rank: 20, name: "OmicronPhi", pnl: -890.2, trades: 74 },
-];
-
 const NOOP = () => {};
 
 type PriceLevel = { price: number; qty: number };
@@ -40,27 +17,31 @@ export default function ViewPage() {
     1: { bids: [], asks: [] }, 2: { bids: [], asks: [] },
     3: { bids: [], asks: [] }, 4: { bids: [], asks: [] },
   });
+  const [midPrices, setMidPrices] = useState<Record<number, number>>({ 1: 50, 2: 50, 3: 50, 4: 50 });
   const [histories, setHistories] = useState<Record<number, number[]>>({ 1: [], 2: [], 3: [], 4: [] });
+  const [leaderboard, setLeaderboard] = useState<{ rank: number; clientName: string; portfolioValue: number }[]>([]);
   const viewerClientId = useRef<string>(crypto.randomUUID());
 
   useEffect(() => {
-    const ws = new WebSocket("ws://localhost:8080");
+    const ws = new WebSocket("wss://ary-credit.ngrok.app");
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "initial_load", clientId: viewerClientId.current, clientName: "viewer", lastSeq: 0 }));
+      ws.send(JSON.stringify({ type: "view", clientId: viewerClientId.current }));
     };
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data as string);
+        if (msg.type === "leaderboard_update" && Array.isArray(msg.entries)) {
+          setLeaderboard(msg.entries);
+          return;
+        }
+        if (msg.type === "price_history_update" && msg.priceHistory) {
+          setHistories(msg.priceHistory);
+          return;
+        }
         if (msg.clientId === viewerClientId.current && msg.type === "order_book_update" && msg.orderBook) {
-          // TODO: backend needs to include assetId in this message; defaulting to 1 (ALPHA) until then
           const assetId: number = msg.assetId ?? 1;
           setOrderBooks(prev => ({ ...prev, [assetId]: msg.orderBook }));
-          setHistories(prev => {
-            const ob: OrderBook = msg.orderBook;
-            if (!ob.bids.length || !ob.asks.length) return prev;
-            const mid = (ob.bids[0].price + ob.asks[ob.asks.length - 1].price) / 2;
-            return { ...prev, [assetId]: [...prev[assetId], mid].slice(-30) };
-          });
+          setMidPrices(prev => ({ ...prev, [assetId]: msg.midPrice }));
         }
       } catch { /* ignore malformed messages */ }
     };
@@ -89,8 +70,8 @@ export default function ViewPage() {
 
       <div style={{
         flex: 1, display: "grid",
-        gridTemplateColumns: "repeat(5,minmax(0,1fr))",
-        gridTemplateRows: "repeat(1,minmax(0,1fr))",
+        gridTemplateColumns: "repeat(2,minmax(0,1fr)) 320px",
+        gridTemplateRows: "repeat(2,minmax(0,1fr))",
         gap: "6px", padding: "6px", minHeight: 0,
       }}>
         {SECURITY_META.map((meta) => (
@@ -99,12 +80,15 @@ export default function ViewPage() {
             viewToggle={true}
             security={{ ...meta, history: histories[meta.id] }}
             orderBook={orderBooks[meta.id]}
+            midPrice={midPrices[meta.id]}
             onOrder={NOOP}
             rejectionMsg={null}
             onDismissRejection={NOOP}
           />
         ))}
-        <LeaderboardPanel leaderboard={LEADERBOARD} />
+        <div style={{ gridColumn: "3", gridRow: "1 / span 2" }}>
+          <LeaderboardPanel leaderboard={leaderboard} />
+        </div>
       </div>
     </div>
   );

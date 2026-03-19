@@ -1,6 +1,6 @@
 export type EngineRequest = {
     reqId: string;
-    op: "place" | "cancel" | "modify" | "initial_load";
+    op: "place" | "cancel" | "initial_load";
     [k: string]: unknown
 };
 
@@ -17,11 +17,9 @@ export type EngineResponse = {
     reqId: string;
     orderId: number;
     clientId: string;
-    op: "place" | "cancel" | "modify" | "initial_load";
-    assetId?: number;
+    op: "place" | "cancel" | "initial_load";
+    assetId: number;
     execution_status: boolean;
-    order_status: "Invalid order" | "pending" | "partially_filled" | "filled";
-    remainingQty: number;
     trades: EngineTrade[];
     all_bids: { price: number; qty: number }[];
     all_asks: { price: number; qty: number }[];

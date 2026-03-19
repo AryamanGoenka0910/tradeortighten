@@ -4,7 +4,7 @@ import readline from "node:readline";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-import type { EngineRequest, EngineResponse, EngineTrade } from "./engine_types.js";
+import type { EngineRequest, EngineResponse } from "./engine_types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,7 +45,7 @@ export class EngineBridge {
 
         console.log("Requesting engine: ", payload);
         const reqId = String(this.nextId++);
-        const req: EngineRequest = { reqId, op: payload.op as "place" | "cancel" | "modify", ...payload };
+        const req: EngineRequest = { reqId, op: payload.op as "place" | "cancel" | "initial_load", ...payload };
 
         return new Promise((resolve, reject) => {
             const timer = setTimeout(() => {

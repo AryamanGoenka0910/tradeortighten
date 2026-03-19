@@ -46,6 +46,7 @@ interface WsMessage {
   orders?: ServerOrderRaw[];
   order?: ServerOrderRaw;
   orderBook?: OrderBook;
+  midPrice?: number;
   assetId?: number;
   asset?: number;
   seq?: number;
@@ -66,7 +67,7 @@ interface ServerPortfolioRaw {
 interface ServerPortfolioPartial {
   cashAvailable?: number | string;
   cashReserved?: number | string;
-  assetId?: number | null;
+  asset?: number | null;
   positionsAvailable?: number | string;
   positionsReserved?: number | string;
 }
@@ -91,8 +92,8 @@ function mergePartialPortfolio(prev: Portfolio | null, partial: ServerPortfolioP
     cashReserved: Number(partial.cashReserved ?? base.cashReserved),
     positions: { ...base.positions },
   };
-  if (partial.assetId != null) {
-    next.positions[partial.assetId] = {
+  if (partial.asset != null) {
+    next.positions[partial.asset] = {
       available: Number(partial.positionsAvailable ?? 0),
       reserved: Number(partial.positionsReserved ?? 0),
     };
@@ -154,6 +155,10 @@ export default function TradePage() {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [rejections, setRejections] = useState<Record<number, string>>({});
 
+  // Timer state (driven by admin via WS)
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerResetKey, setTimerResetKey] = useState(0);
+
   // Orderbook Data
   const [orderBooks, setOrderBooks] = useState<Record<number, OrderBook>>({
     1: { bids: [], asks: [] },
@@ -162,6 +167,7 @@ export default function TradePage() {
     4: { bids: [], asks: [] },
   });
   const [histories, setHistories] = useState<Record<number, number[]>>({ 1: [], 2: [], 3: [], 4: [] });
+  const [midPrices, setMidPrices] = useState<Record<number, number>>({ 1: 50, 2: 50, 3: 50, 4: 50 });
 
 
   const applyOrderDelta = (serverOrder: ServerOrderRaw) => {
@@ -282,14 +288,26 @@ export default function TradePage() {
         }
 
         if (msg.clientId === user.id && msg.type === "order_book_update" && msg.orderBook) {
-          const assetId: number = msg.assetId ?? 1;
+          const assetId: number = msg.assetId!;
           setOrderBooks(prev => ({ ...prev, [assetId]: msg.orderBook! }));
+          setMidPrices(prev => ({ ...prev, [assetId]: msg.midPrice! }));
+          
           setHistories(prev => {
             const ob = msg.orderBook!;
             if (!ob.bids.length || !ob.asks.length) return prev;
             const mid = (ob.bids[0].price + ob.asks[ob.asks.length - 1].price) / 2;
             return { ...prev, [assetId]: [...(prev[assetId] ?? []), mid].slice(-30) };
           });
+          return;
+        }
+
+        if (msg.type === "timer_update") {
+          if ((msg as unknown as { action: string }).action === "start") {
+            setTimerRunning(true);
+          } else {
+            setTimerRunning(false);
+            setTimerResetKey((k) => k + 1);
+          }
           return;
         }
 
@@ -415,6 +433,8 @@ export default function TradePage() {
       <PageHeader
         isSigningOut={isSigningOut}
         onSignOut={handleSignOut}
+        timerRunning={timerRunning}
+        timerResetKey={timerResetKey}
       />
 
     {/* Main Content */}
@@ -430,13 +450,14 @@ export default function TradePage() {
           viewToggle={false}
           security={{ ...meta, history: histories[meta.id] }}
           orderBook={orderBooks[meta.id]}
+          midPrice={midPrices[meta.id]}
           onOrder={handleOrder}
           rejectionMsg={rejections[meta.id] ?? null}
           onDismissRejection={() => setRejections(prev => { const next = { ...prev }; delete next[meta.id]; return next; })}
         />
       ))}
       <div style={{ gridColumn: "3", gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "6px", minHeight: 0 }}>
-        <PortfolioPanel portfolio={portfolio} orders={openOrders} />
+        <PortfolioPanel portfolio={portfolio} orders={openOrders} midPrices={midPrices} />
 
         {/* Tab toggle */}
         <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
