@@ -100,6 +100,8 @@ export default function ViewPage() {
             security={{ ...meta, history: histories[meta.id] }}
             orderBook={orderBooks[meta.id]}
             onOrder={NOOP}
+            rejectionMsg={null}
+            onDismissRejection={NOOP}
           />
         ))}
         <LeaderboardPanel leaderboard={LEADERBOARD} />
