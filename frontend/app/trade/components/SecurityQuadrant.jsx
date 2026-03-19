@@ -173,7 +173,7 @@ function InlineOrderEntry({ security, onSubmit }) {
   );
 }
 
-export default function SecurityQuadrant({ viewToggle, security, orderBook, onOrder }) {
+export default function SecurityQuadrant({ viewToggle, security, orderBook, onOrder, rejectionMsg, onDismissRejection }) {
   
   const bids = (orderBook?.bids ?? []).filter((b) => b.qty > 0);
   const asks = (orderBook?.asks ?? []).filter((a) => a.qty > 0);
@@ -188,6 +188,24 @@ export default function SecurityQuadrant({ viewToggle, security, orderBook, onOr
       position: "relative", overflow: "hidden", minHeight: 0,
       width: "100%", justifySelf: "stretch",
     }}>
+      {rejectionMsg && (
+        <div style={{
+          position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(10,10,18,0.82)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 100, cursor: "pointer",
+          animation: "fadeSlideDown 0.15s ease",
+        }} onClick={onDismissRejection}>
+          <div style={{
+            background: "rgba(255,108,108,0.1)", border: "1px solid rgba(255,108,108,0.45)",
+            borderRadius: "8px", padding: "12px 18px", textAlign: "center", maxWidth: "80%",
+          }}>
+            <div style={{ fontSize: "10px", fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, color: "#FF6C6C", letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: "4px" }}>Order Rejected</div>
+            <div style={{ fontSize: "11px", fontFamily: "'JetBrains Mono',monospace", color: "#f3c5cf" }}>{rejectionMsg}</div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: security.color, boxShadow: `0 0 6px ${security.color}40` }} />

@@ -1,6 +1,6 @@
 import { pool } from "../db.js";
 import type { EngineBridge } from "../order_book_engine/bridge_engine.js";
-import { rowToOrderState } from "../lib/order_utils.js";
+import { rowToOrderState, rowToPortfolio } from "../lib/order_utils.js";
 import { sendToClient, broadcastOrderBook } from "../lib/connection_manager.js";
 
 type CancelMessage = {
@@ -17,16 +17,13 @@ export const handleCancel = async (
   console.log("Cancelling order: ", message);
 
   let cancelOrder;
-  let assetId: number;
   try {
     const { rows } = await pool.query(
       "select * from trade_or_tighten.cancel_order($1, $2, $3, $4)",
-      [message.clientId, message.orderId, "cancelled", message.assetId ?? null]
+      [message.clientId, message.orderId, "cancelled", message.assetId]
     );
-    const cancelResult = rows[0];
-    cancelOrder = rowToOrderState(cancelResult);
-    assetId = cancelOrder.asset;
-    console.log("cancel_order result: ", cancelResult);
+    cancelOrder = rowToOrderState(rows[0]);
+    console.log("cancel_order result: ", rows[0]);
   } catch (e) {
     sendToClient(message.clientId, {
       type: "cancel_rejected",
@@ -42,7 +39,7 @@ export const handleCancel = async (
     op: "cancel",
     clientId: message.clientId,
     orderId: message.orderId,
-    assetId,
+    assetId: message.assetId,
   });
 
   // Query updated portfolio for the affected asset
@@ -53,17 +50,9 @@ export const handleCancel = async (
        FROM trade_or_tighten.client_cash cc
        JOIN trade_or_tighten.client_positions cp ON cp.client_id = cc.client_id AND cp.asset_id = $2
        WHERE cc.client_id = $1`,
-      [message.clientId, assetId]
+      [message.clientId, message.assetId]
     );
-    if (rows[0]) {
-      portfolio = {
-        cashAvailable: Number(rows[0].cash_available),
-        cashReserved: Number(rows[0].cash_reserved),
-        assetId,
-        positionsAvailable: Number(rows[0].positions_available),
-        positionsReserved: Number(rows[0].positions_reserved),
-      };
-    }
+    portfolio = rowToPortfolio(rows[0], message.assetId);
   } catch (e) {
     console.error("Error fetching portfolio after cancel: ", e);
   }
@@ -77,7 +66,5 @@ export const handleCancel = async (
   });
 
   // Broadcast updated order book for this asset to all clients
-  if (res.execution_status) {
-    broadcastOrderBook(res.all_bids, res.all_asks, assetId, 0);
-  }
+  broadcastOrderBook(res.all_bids, res.all_asks, message.assetId, 0);
 };

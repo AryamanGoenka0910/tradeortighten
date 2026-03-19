@@ -1,11 +1,11 @@
 import { pool } from "../db.js";
 import type { EngineBridge } from "../order_book_engine/bridge_engine.js";
-import { rowToOrderState, deriveOrderStatus } from "../lib/order_utils.js";
+import { rowToOrderState, rowToPortfolio, deriveOrderStatus } from "../lib/order_utils.js";
 import { sendToClient, broadcastOrderBook } from "../lib/connection_manager.js";
 
 type PlaceMessage = {
-  clientId: string;
   type: "place";
+  clientId: string;
   seq: number;
   clientOrderId: string;
   side: "buy" | "sell";
@@ -21,8 +21,6 @@ export const handlePlace = async (
 ): Promise<void> => {
   console.log("Placing order: ", message);
 
-  const assetId = message.asset ?? 1;
-
   // 1. Pre-flight DB check
   let pre;
   try {
@@ -35,7 +33,7 @@ export const handlePlace = async (
         message.side,
         message.price,
         message.qty,
-        assetId
+        message.asset,
       ]
     );
     pre = rows[0];
@@ -49,11 +47,13 @@ export const handlePlace = async (
       );
       if (seqRows[0]) serverLastSeq = Number(seqRows[0].last_seq);
     } catch {}
+    
     sendToClient(message.clientId, {
       type: "place_rejected",
       clientId: message.clientId,
       seq: message.seq,
       serverLastSeq,
+      asset: message.asset,
       reason: String(e),
     });
     console.error("Error in place_taker_order: ", e);
@@ -71,6 +71,7 @@ export const handlePlace = async (
       seq: message.seq,
       clientOrderId: message.clientOrderId,
       order: preOrder,
+      asset: message.asset,
     });
 
     return;
@@ -78,27 +79,20 @@ export const handlePlace = async (
   submittedToEngine.add(submitKey);
 
   // 3. Submit to engine
+  // Key is removed after this handler completes so the set doesn't grow unbounded.
+  // True late duplicates are rejected by the DB's (client_id, client_order_id) unique constraint.
   const res = await bridge.request({
     op: "place",
     clientId: message.clientId,
-    assetId,
+    asset: message.asset,
     side: message.side,
     price: message.price,
     qty: message.qty,
   });
 
   if (!res.execution_status) {
-    await pool.query(
-      "select * from trade_or_tighten.reject_order($1,$2,$3)",
-      [message.clientId, message.clientOrderId, message.seq]
-    );
-    sendToClient(message.clientId, {
-      type: "place_rejected",
-      clientId: message.clientId,
-      seq: message.seq,
-      reason: res.order_status,
-    });
-    console.error("Engine rejected order: ", res);
+    // send to Admin Log
+    submittedToEngine.delete(submitKey);
     return;
   }
 
@@ -127,18 +121,10 @@ export const handlePlace = async (
         takerCurrentQty,
         takerPriceDelta,
         takerAssetDelta,
-        assetId
+        message.asset,
       ]
     );
     const post = rows[0];
-
-    const takerPortfolio = post.positions_available != null ? {
-      cashAvailable: Number(post.cash_available),
-      cashReserved: Number(post.cash_reserved),
-      assetId,
-      positionsAvailable: Number(post.positions_available),
-      positionsReserved: Number(post.positions_reserved),
-    } : undefined;
 
     sendToClient(message.clientId, {
       type: "order_update_snapshot",
@@ -146,18 +132,13 @@ export const handlePlace = async (
       seq: message.seq,
       orderId: res.orderId,
       order: rowToOrderState(post),
-      portfolio: takerPortfolio,
+      portfolio: rowToPortfolio(post, message.asset),
     });
 
     console.log("Taker order updated: ", post);
   } catch (e) {
-    sendToClient(message.clientId, {
-      type: "update_taker_order_rejected",
-      clientId: message.clientId,
-      seq: message.seq,
-      reason: String(e),
-    });
     console.error("Error in update_taker_order: ", e);
+    submittedToEngine.delete(submitKey);
     return;
   }
 
@@ -175,33 +156,28 @@ export const handlePlace = async (
           makerOrderId,
           trade.price,
           trade.qty,
-          assetId
+          message.asset,
         ]
       );
       const postMaker = rows[0];
-
-      const makerPortfolio = {
-        cashAvailable: Number(postMaker.cash_available),
-        cashReserved: Number(postMaker.cash_reserved),
-        assetId,
-        positionsAvailable: Number(postMaker.positions_available),
-        positionsReserved: Number(postMaker.positions_reserved),
-      };
 
       sendToClient(makerClientId, {
         type: "order_update_snapshot",
         clientId: makerClientId,
         orderId: makerOrderId,
         order: rowToOrderState(postMaker),
-        portfolio: makerPortfolio,
+        portfolio: rowToPortfolio(postMaker, message.asset),
       });
+      
       console.log(`Maker order ${makerOrderId} updated for client ${makerClientId}: `, postMaker);
     } catch (e) {
       console.error(`Error updating maker order ${makerOrderId} for client ${makerClientId}: `, e);
-      break;
+      continue;
     }
   }
 
   // 7. Broadcast updated order book to all clients
-  broadcastOrderBook(res.all_bids, res.all_asks, assetId, message.seq);
+  broadcastOrderBook(res.all_bids, res.all_asks, message.asset, message.seq);
+
+  submittedToEngine.delete(submitKey);
 };

@@ -61,189 +61,6 @@ const MOCK_USERS = [
   },
 ];
 
-const INITIAL_LOGS = [
-  { time: "10:00:01", level: "info", msg: "System initialized" },
-  { time: "10:00:02", level: "info", msg: "WebSocket server started on ws://localhost:8080" },
-  { time: "10:00:03", level: "info", msg: "PostgreSQL connection pool ready (5 connections)" },
-  { time: "10:00:05", level: "info", msg: "C++ OrderBook engine spawned (PID 42891)" },
-  { time: "10:00:12", level: "connect", msg: "Client connected: QuantWolf (u1)" },
-  { time: "10:00:14", level: "connect", msg: "Client connected: AlphaSeeker (u2)" },
-  { time: "10:00:18", level: "order", msg: "ORDER PLACED: QuantWolf BUY ALPHA 30@52.0" },
-  { time: "10:00:22", level: "order", msg: "ORDER PLACED: AlphaSeeker BUY BETA 60@34.5" },
-  { time: "10:00:25", level: "connect", msg: "Client connected: BayesianBandit (u3)" },
-  { time: "10:00:31", level: "order", msg: "ORDER FILLED: QuantWolf BUY ALPHA 30@52.0 (matched)" },
-  { time: "10:00:35", level: "warn", msg: "High latency detected: 142ms avg response time" },
-  { time: "10:00:40", level: "order", msg: "ORDER PLACED: BayesianBandit SELL ALPHA 25@53.0" },
-  { time: "10:00:45", level: "connect", msg: "Client connected: MarkovChain (u5)" },
-  { time: "10:00:50", level: "order", msg: "ORDER CANCELLED: SigmaTrader BUY DELTA 80@21.0" },
-  { time: "10:00:55", level: "info", msg: "Order book snapshot broadcast to 5 clients" },
-];
-
-const LOG_TEMPLATES = [
-  { level: "order", msg: "ORDER PLACED: {user} {side} {sym} {qty}@{price}" },
-  { level: "order", msg: "ORDER FILLED: {user} {side} {sym} {qty}@{price} (matched)" },
-  { level: "order", msg: "ORDER CANCELLED: {user} {side} {sym} {qty}@{price}" },
-  { level: "connect", msg: "Client connected: {user}" },
-  { level: "info", msg: "Order book snapshot broadcast to {n} clients" },
-  { level: "info", msg: "Heartbeat OK — {n} active connections" },
-  { level: "warn", msg: "High latency detected: {n}ms avg response time" },
-];
-
-function generateLog() {
-  const users = ["QuantWolf", "AlphaSeeker", "BayesianBandit", "MarkovChain", "DeltaForce", "ThetaDecay"];
-  const sides = ["BUY", "SELL"];
-  const syms = ["ALPHA", "BETA", "GAMMA", "DELTA"];
-  const template = LOG_TEMPLATES[Math.floor(Math.random() * LOG_TEMPLATES.length)];
-  const now = new Date();
-  const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
-  let msg = template.msg
-    .replace("{user}", users[Math.floor(Math.random() * users.length)])
-    .replace("{side}", sides[Math.floor(Math.random() * 2)])
-    .replace("{sym}", syms[Math.floor(Math.random() * 4)])
-    .replace("{qty}", String(Math.floor(10 + Math.random() * 100)))
-    .replace("{price}", (20 + Math.random() * 60).toFixed(1))
-    .replace("{n}", String(Math.floor(3 + Math.random() * 10)));
-  return { time, level: template.level, msg };
-}
-
-const LEVEL_META = {
-  all:     { label: "ALL",     color: "#6b7280" },
-  info:    { label: "INFO",    color: "#4b5563" },
-  connect: { label: "CONN",    color: "#00E5A0" },
-  order:   { label: "ORDER",   color: "#6C8EFF" },
-  warn:    { label: "WARN",    color: "#FFB84D" },
-  error:   { label: "ERROR",   color: "#FF6C6C" },
-};
-
-function levelColor(level) {
-  return LEVEL_META[level]?.color ?? "#4b5563";
-}
-
-function LogPanel({ logs, onClear }) {
-  const scrollRef = useRef(null);
-  const [filter, setFilter] = useState("all");
-  const [autoScroll, setAutoScroll] = useState(true);
-
-  const filtered = filter === "all" ? logs : logs.filter((l) => l.level === filter);
-
-  useEffect(() => {
-    if (autoScroll && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [filtered, autoScroll]);
-
-  const counts = {};
-  for (const l of logs) counts[l.level] = (counts[l.level] ?? 0) + 1;
-
-  return (
-    <div style={{
-      background: "#06080e", border: "1px solid #131825", borderRadius: "10px",
-      display: "flex", flexDirection: "column", overflow: "hidden",
-    }}>
-      {/* Terminal title bar */}
-      <div style={{
-        padding: "8px 12px", borderBottom: "1px solid #131825",
-        display: "flex", alignItems: "center", gap: "6px", flexShrink: 0,
-      }}>
-        <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#FF6C6C" }} />
-        <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#FFB84D" }} />
-        <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#00E5A0" }} />
-        <span style={{ fontSize: "10px", color: "#3b4252", marginLeft: "6px", fontFamily: "'JetBrains Mono',monospace", flex: 1 }}>
-          system.log — {logs.length} entries
-        </span>
-        {/* Auto-scroll toggle */}
-        <button
-          onClick={() => setAutoScroll((v) => !v)}
-          title={autoScroll ? "Disable auto-scroll" : "Enable auto-scroll"}
-          style={{
-            padding: "2px 7px", borderRadius: "4px", fontSize: "9px", fontWeight: 700,
-            cursor: "pointer", fontFamily: "'Space Grotesk',sans-serif",
-            background: autoScroll ? "rgba(0,229,160,0.1)" : "rgba(255,255,255,0.04)",
-            border: `1px solid ${autoScroll ? "rgba(0,229,160,0.2)" : "#1a1f2e"}`,
-            color: autoScroll ? "#00E5A0" : "#4b5563",
-          }}
-        >
-          ↓ SCROLL
-        </button>
-        {/* Clear */}
-        <button
-          onClick={onClear}
-          style={{
-            padding: "2px 7px", borderRadius: "4px", fontSize: "9px", fontWeight: 700,
-            cursor: "pointer", fontFamily: "'Space Grotesk',sans-serif",
-            background: "rgba(255,108,108,0.06)", border: "1px solid rgba(255,108,108,0.15)",
-            color: "#FF6C6C",
-          }}
-        >
-          CLEAR
-        </button>
-      </div>
-
-      {/* Filter bar */}
-      <div style={{
-        display: "flex", gap: "4px", padding: "6px 10px",
-        borderBottom: "1px solid #0c0f17", flexShrink: 0, flexWrap: "wrap",
-      }}>
-        {Object.entries(LEVEL_META).map(([key, meta]) => {
-          const active = filter === key;
-          const cnt = key === "all" ? logs.length : (counts[key] ?? 0);
-          return (
-            <button
-              key={key}
-              onClick={() => setFilter(key)}
-              style={{
-                padding: "2px 8px", borderRadius: "4px", fontSize: "9px", fontWeight: 700,
-                cursor: "pointer", fontFamily: "'JetBrains Mono',monospace",
-                background: active ? `${meta.color}18` : "transparent",
-                border: `1px solid ${active ? meta.color + "55" : "#1a1f2e"}`,
-                color: active ? meta.color : "#3b4252",
-                display: "flex", alignItems: "center", gap: "4px",
-              }}
-            >
-              {meta.label}
-              <span style={{
-                fontSize: "8px", padding: "0 4px", borderRadius: "3px",
-                background: active ? `${meta.color}22` : "#0c0f17",
-                color: active ? meta.color : "#2a3040",
-              }}>{cnt}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Log lines */}
-      <div
-        ref={scrollRef}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
-          if (!atBottom && autoScroll) setAutoScroll(false);
-        }}
-        style={{
-          flex: 1, overflow: "auto", padding: "8px 10px",
-          fontFamily: "'JetBrains Mono',monospace", fontSize: "10px", lineHeight: "18px",
-          minHeight: "120px",
-        }}
-      >
-        {filtered.length === 0 && (
-          <div style={{ color: "#2a3040", textAlign: "center", paddingTop: "16px" }}>No entries for this filter</div>
-        )}
-        {filtered.map((log, i) => (
-          <div key={i} style={{ display: "flex", gap: "8px" }}>
-            <span style={{ color: "#2a3040", flexShrink: 0 }}>{log.time}</span>
-            <span style={{
-              color: levelColor(log.level), fontWeight: 600,
-              minWidth: "58px", flexShrink: 0,
-            }}>
-              [{log.level.toUpperCase()}]
-            </span>
-            <span style={{ color: "#9ca3af", wordBreak: "break-all" }}>{log.msg}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function UserRow({ user, onBan, onCancelOrder }) {
   const [expanded, setExpanded] = useState(false);
@@ -391,23 +208,9 @@ function UserRow({ user, onBan, onCancelOrder }) {
 
 export default function AdminPanel() {
   const [wsState, setWsState] = useState(true);
-  const [logs, setLogs] = useState(INITIAL_LOGS);
   const [users, setUsers] = useState(MOCK_USERS);
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    if (!wsState) return;
-    const iv = setInterval(() => {
-      setLogs((prev) => [...prev, generateLog()]);
-    }, 3000 + Math.random() * 4000);
-    return () => clearInterval(iv);
-  }, [wsState]);
-
-  const addLog = (entries) => {
-    const now = new Date();
-    const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
-    setLogs((prev) => [...prev, ...entries.map((e) => ({ time, ...e }))]);
-  };
 
   const toggleBan = (userId) => {
     const user = users.find((u) => u.id === userId);
@@ -428,12 +231,6 @@ export default function AdminPanel() {
   };
 
   const handleResetDb = () => {
-    addLog([
-      { level: "warn", msg: "Database reset initiated by admin" },
-      { level: "info", msg: "Truncating tables: client_orders, client_positions, client_cash..." },
-      { level: "info", msg: "Re-seeding initial portfolio data..." },
-      { level: "info", msg: "Database reset complete" },
-    ]);
   };
 
   const handleWsToggle = (on) => {
@@ -545,11 +342,6 @@ export default function AdminPanel() {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* 2. Log Panel */}
-      <div style={{ flexShrink: 0, minHeight: "220px" }}>
-        <LogPanel logs={logs} onClear={() => setLogs([])} />
       </div>
 
       {/* 3. User Management */}

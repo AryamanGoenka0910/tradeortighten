@@ -90,7 +90,7 @@ begin
 
     update trade_or_tighten.client_cash cp
     set
-      cash_available = cash_available + v_trade_value
+      cash_available = cp.cash_available + v_trade_value
     where cp.client_id = p_client_id
     returning cp.cash_available, cp.cash_reserved
     into v_cash;

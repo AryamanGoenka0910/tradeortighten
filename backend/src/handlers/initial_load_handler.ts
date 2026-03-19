@@ -3,8 +3,8 @@ import type { EngineBridge } from "../order_book_engine/bridge_engine.js";
 import { rowToOrderState } from "../lib/order_utils.js";
 import { sendToClient } from "../lib/connection_manager.js";
 
-const STARTING_CASH = 100000;
-const STARTING_ASSET1 = 1000;
+const STARTING_CASH = 10000;
+const STARTING_ASSET1 = 100;
 
 type InitialLoadMessage = {
   clientId: string;

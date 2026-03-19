@@ -47,10 +47,12 @@ interface WsMessage {
   order?: ServerOrderRaw;
   orderBook?: OrderBook;
   assetId?: number;
+  asset?: number;
   seq?: number;
   serverLastSeq?: number;
   client?: { lastSeq?: number };
   entries?: LeaderboardEntry[];
+  reason?: string;
 }
 // --- Portfolio helpers ---
 interface ServerPortfolioRaw {
@@ -150,6 +152,7 @@ export default function TradePage() {
   // Client UI data
   const [authError, setAuthError] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [rejections, setRejections] = useState<Record<number, string>>({});
 
   // Orderbook Data
   const [orderBooks, setOrderBooks] = useState<Record<number, OrderBook>>({
@@ -296,6 +299,15 @@ export default function TradePage() {
           } else {
             syncSeq(msg.seq);
           }
+          if (msg.asset != null && msg.reason) {
+            // TODO: MAKE a mapping of reasons
+            const assetId = msg.asset;
+            const reason = msg.reason.length > 80 ? msg.reason.slice(0, 80) + "…" : msg.reason;
+            setRejections(prev => ({ ...prev, [assetId]: reason }));
+            setTimeout(() => {
+              setRejections(prev => { const next = { ...prev }; delete next[assetId]; return next; });
+            }, 2000);
+          }
           return;
         }
       };
@@ -419,6 +431,8 @@ export default function TradePage() {
           security={{ ...meta, history: histories[meta.id] }}
           orderBook={orderBooks[meta.id]}
           onOrder={handleOrder}
+          rejectionMsg={rejections[meta.id] ?? null}
+          onDismissRejection={() => setRejections(prev => { const next = { ...prev }; delete next[meta.id]; return next; })}
         />
       ))}
       <div style={{ gridColumn: "3", gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: "6px", minHeight: 0 }}>
