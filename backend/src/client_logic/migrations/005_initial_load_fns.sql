@@ -21,7 +21,21 @@ returns table (
 )
 language plpgsql
 as $$
+declare
+  v_slot int4;
+  v_a1   int4 := 0;
+  v_a2   int4 := 0;
+  v_a3   int4 := 0;
+  v_a4   int4 := 0;
 begin
+  -- Assign asset slot based on join order (mod 4), only on first join
+  select (count(*) % 4)::int4 into v_slot from trade_or_tighten.clients;
+  if    v_slot = 0 then v_a1 := p_starting_asset;
+  elsif v_slot = 1 then v_a2 := p_starting_asset;
+  elsif v_slot = 2 then v_a3 := p_starting_asset;
+  else                   v_a4 := p_starting_asset;
+  end if;
+
   insert into trade_or_tighten.clients (client_id, client_name, last_seq)
   values (p_client_id, p_client_name, 0)
   on conflict on constraint clients_pkey do nothing;
@@ -32,10 +46,10 @@ begin
 
   insert into trade_or_tighten.client_positions (client_id, asset_id, available, reserved)
   values
-    (p_client_id, 1, p_starting_asset, 0),
-    (p_client_id, 2, p_starting_asset, 0),
-    (p_client_id, 3, p_starting_asset, 0),
-    (p_client_id, 4, p_starting_asset, 0)
+    (p_client_id, 1, v_a1, 0),
+    (p_client_id, 2, v_a2, 0),
+    (p_client_id, 3, v_a3, 0),
+    (p_client_id, 4, v_a4, 0)
   on conflict on constraint client_positions_pkey do nothing;
 
   return query

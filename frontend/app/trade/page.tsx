@@ -158,6 +158,7 @@ export default function TradePage() {
   // Timer state (driven by admin via WS)
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerResetKey, setTimerResetKey] = useState(0);
+  const [currentRound, setCurrentRound] = useState<1 | 2 | 3 | null>(null);
 
   // Orderbook Data
   const [orderBooks, setOrderBooks] = useState<Record<number, OrderBook>>({
@@ -166,7 +167,6 @@ export default function TradePage() {
     3: { bids: [], asks: [] },
     4: { bids: [], asks: [] },
   });
-  const [histories, setHistories] = useState<Record<number, number[]>>({ 1: [], 2: [], 3: [], 4: [] });
   const [midPrices, setMidPrices] = useState<Record<number, number>>({ 1: 50, 2: 50, 3: 50, 4: 50 });
 
 
@@ -219,8 +219,7 @@ export default function TradePage() {
       setClientId(user.id);
       setClientName(resolvedClientName);
 
-      socket = new WebSocket("wss://ary-credit.ngrok.app");
-      // socket = new WebSocket("ws://localhost:8080");
+      socket = new WebSocket(process.env.NEXT_PUBLIC_WS_URL!);
       wsRef.current = socket;
 
       socket.onopen = () => {
@@ -291,13 +290,6 @@ export default function TradePage() {
           const assetId: number = msg.assetId!;
           setOrderBooks(prev => ({ ...prev, [assetId]: msg.orderBook! }));
           setMidPrices(prev => ({ ...prev, [assetId]: msg.midPrice! }));
-          
-          setHistories(prev => {
-            const ob = msg.orderBook!;
-            if (!ob.bids.length || !ob.asks.length) return prev;
-            const mid = (ob.bids[0].price + ob.asks[ob.asks.length - 1].price) / 2;
-            return { ...prev, [assetId]: [...(prev[assetId] ?? []), mid].slice(-30) };
-          });
           return;
         }
 
@@ -311,6 +303,17 @@ export default function TradePage() {
           return;
         }
 
+        if (msg.type === "round_update") {
+          setCurrentRound((msg as unknown as { round: 1 | 2 | 3 | null }).round);
+          return;
+        }
+
+        if (msg.type === "settlement_update") {
+          const prices = (msg as unknown as { prices: Record<number, number> }).prices;
+          setMidPrices(prev => ({ ...prev, ...prices }));
+          return;
+        }
+
         if (msg.clientId === user.id && msg.type === "place_rejected") {
           if (msg.serverLastSeq != null) {
             seqRef.current = msg.serverLastSeq;
@@ -318,7 +321,6 @@ export default function TradePage() {
             syncSeq(msg.seq);
           }
           if (msg.asset != null && msg.reason) {
-            // TODO: MAKE a mapping of reasons
             const assetId = msg.asset;
             const reason = msg.reason.length > 80 ? msg.reason.slice(0, 80) + "…" : msg.reason;
             setRejections(prev => ({ ...prev, [assetId]: reason }));
@@ -435,6 +437,7 @@ export default function TradePage() {
         onSignOut={handleSignOut}
         timerRunning={timerRunning}
         timerResetKey={timerResetKey}
+        currentRound={currentRound}
       />
 
     {/* Main Content */}
@@ -448,7 +451,7 @@ export default function TradePage() {
         <SecurityQuadrant
           key={meta.id}
           viewToggle={false}
-          security={{ ...meta, history: histories[meta.id] }}
+          security={meta}
           orderBook={orderBooks[meta.id]}
           midPrice={midPrices[meta.id]}
           onOrder={handleOrder}

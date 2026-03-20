@@ -2,7 +2,7 @@ import { pool } from "../db.js";
 import type { EngineBridge } from "../order_book_engine/bridge_engine.js";
 import { rowToOrderState, rowToPortfolio, deriveOrderStatus } from "../lib/order_utils.js";
 import { sendToClient, broadcastOrderBook } from "../lib/connection_manager.js";
-import { tradingEnabled } from "../lib/trading_state.js";
+import { tradingEnabled, currentRound } from "../lib/trading_state.js";
 
 type PlaceMessage = {
   type: "place";
@@ -23,6 +23,20 @@ export const handlePlace = async (
 
   if (!tradingEnabled) {
     return;
+  }
+
+  // Round 2: GAMMA (asset 3) and SIGMA (asset 4) are prediction markets — prices must be 1–99
+  if (currentRound === 2 && (message.asset === 3 || message.asset === 4)) {
+    if (message.price < 1 || message.price > 99) {
+      sendToClient(message.clientId, {
+        type: "place_rejected",
+        clientId: message.clientId,
+        seq: message.seq,
+        asset: message.asset,
+        reason: "Prediction market price must be between 1 and 99",
+      });
+      return;
+    }
   }
 
    console.log("Placing order: ", message);

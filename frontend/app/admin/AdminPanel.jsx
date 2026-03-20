@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 
-const WS_URL = "wss://ary-credit.ngrok.app";
-// const WS_URL = "ws://localhost:8080";
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL;
 
 const ASSET_NAMES = { 1: "ALPHA", 2: "BETA", 3: "GAMMA", 4: "DELTA" };
 const ASSET_COLORS = { 1: "#00E5A0", 2: "#6C8EFF", 3: "#FF6C6C", 4: "#FFB84D" };
@@ -14,6 +13,7 @@ export default function AdminPanel() {
 
   const [wsConnected, setWsConnected] = useState(false);
   const [tradingActive, setTradingActive] = useState(true);
+  const [currentRound, setCurrentRound] = useState(null);
   const [orders, setOrders] = useState([]);
   const [cancellingId, setCancellingId] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
@@ -67,6 +67,8 @@ export default function AdminPanel() {
           setOrders(msg.orders ?? []);
           setLastRefresh(new Date());
           setServerError(null);
+        } else if (msg.type === "round_update") {
+          setCurrentRound(msg.round);
         } else if (msg.type === "trading_state_update") {
           setTradingActive(msg.enabled);
         } else if (msg.type === "admin_error") {
@@ -100,12 +102,15 @@ export default function AdminPanel() {
     };
   }, []);
 
+  const handleSettle = () => sendMsg({ type: "admin_settle_asset" });
+
   const handleToggleTrading = (enable) => {
     sendMsg({ type: "admin_toggle_trading", enabled: enable });
   };
 
   const handleTimerStart = () => sendMsg({ type: "admin_timer_start" });
   const handleTimerReset = () => sendMsg({ type: "admin_timer_reset" });
+  const handleSetRound = (round) => sendMsg({ type: "admin_set_round", round });
 
   const timerClock = `${String(Math.floor(timerSeconds / 60)).padStart(2, "0")}:${String(timerSeconds % 60).padStart(2, "0")}`;
 
@@ -284,6 +289,87 @@ export default function AdminPanel() {
             }}
           >
             ↺ Reset Timer
+          </button>
+        </div>
+      </div>
+
+      {/* Round Controls */}
+      <div style={{
+        background: "#0c0f17", border: "1px solid #131825",
+        borderRadius: "10px", padding: "14px", flexShrink: 0,
+      }}>
+        <div style={{
+          fontSize: "11px", fontWeight: 800, color: "#6b7280",
+          letterSpacing: "0.8px", textTransform: "uppercase",
+          fontFamily: "'Space Grotesk',sans-serif", marginBottom: "12px",
+        }}>
+          Round Controls
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          {/* Current round indicator */}
+          <div style={{
+            padding: "7px 12px", background: "#0a0d14", borderRadius: "6px",
+            border: `1px solid ${currentRound ? "rgba(108,142,255,0.25)" : "#131825"}`,
+            display: "flex", alignItems: "center", gap: "6px",
+          }}>
+            <span style={{
+              fontSize: "10px", fontWeight: 800, fontFamily: "'Space Grotesk',sans-serif",
+              color: currentRound ? "#6C8EFF" : "#3b4252",
+            }}>
+              {currentRound ? `ROUND ${currentRound} ACTIVE` : "NO ROUND SET"}
+            </span>
+          </div>
+
+          {[1, 2, 3].map((r) => (
+            <button
+              key={r}
+              onClick={() => handleSetRound(r)}
+              disabled={!wsConnected}
+              style={{
+                padding: "7px 14px", borderRadius: "6px", fontSize: "11px", fontWeight: 700,
+                cursor: !wsConnected ? "not-allowed" : "pointer",
+                fontFamily: "'Space Grotesk',sans-serif",
+                background: currentRound === r ? "rgba(108,142,255,0.18)" : "rgba(108,142,255,0.06)",
+                border: currentRound === r ? "1px solid rgba(108,142,255,0.5)" : "1px solid rgba(108,142,255,0.15)",
+                color: "#6C8EFF",
+                opacity: !wsConnected ? 0.35 : 1,
+              }}
+            >
+              Round {r}
+            </button>
+          ))}
+
+          <button
+            onClick={() => handleSetRound(null)}
+            disabled={!wsConnected || currentRound === null}
+            style={{
+              padding: "7px 14px", borderRadius: "6px", fontSize: "11px", fontWeight: 700,
+              cursor: (!wsConnected || currentRound === null) ? "not-allowed" : "pointer",
+              fontFamily: "'Space Grotesk',sans-serif",
+              background: "rgba(255,108,108,0.06)",
+              border: "1px solid rgba(255,108,108,0.15)",
+              color: "#FF6C6C",
+              opacity: (!wsConnected || currentRound === null) ? 0.35 : 1,
+            }}
+          >
+            Clear
+          </button>
+
+          <button
+            onClick={handleSettle}
+            disabled={!wsConnected}
+            style={{
+              padding: "7px 14px", borderRadius: "6px", fontSize: "11px", fontWeight: 700,
+              cursor: !wsConnected ? "not-allowed" : "pointer",
+              fontFamily: "'Space Grotesk',sans-serif",
+              background: "rgba(255,184,77,0.08)",
+              border: "1px solid rgba(255,184,77,0.2)",
+              color: "#FFB84D",
+              opacity: !wsConnected ? 0.35 : 1,
+            }}
+          >
+            ⬛ Settle
           </button>
         </div>
       </div>

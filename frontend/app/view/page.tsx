@@ -23,7 +23,7 @@ export default function ViewPage() {
   const viewerClientId = useRef<string>(crypto.randomUUID());
 
   useEffect(() => {
-    const ws = new WebSocket("wss://ary-credit.ngrok.app");
+    const ws = new WebSocket(process.env.NEXT_PUBLIC_WS_URL!);
     ws.onopen = () => {
       ws.send(JSON.stringify({ type: "view", clientId: viewerClientId.current }));
     };
@@ -42,6 +42,10 @@ export default function ViewPage() {
           const assetId: number = msg.assetId ?? 1;
           setOrderBooks(prev => ({ ...prev, [assetId]: msg.orderBook }));
           setMidPrices(prev => ({ ...prev, [assetId]: msg.midPrice }));
+        }
+        if (msg.type === "settlement_update") {
+          const prices = (msg as { prices: Record<number, number> }).prices;
+          setMidPrices(prev => ({ ...prev, ...prices }));
         }
       } catch { /* ignore malformed messages */ }
     };

@@ -6,28 +6,28 @@ const ROUNDS_INFO = [
   {
     label: "Round 1",
     securities: [
-      { ticker: "ALPHA", color: "#00E5A0", desc: "A high-growth tech company navigating regulatory headwinds in the semiconductor space." },
-      { ticker: "BETA",  color: "#6C8EFF", desc: "A mid-cap financial services firm exposed to interest rate sensitivity and credit risk." },
-      { ticker: "GAMMA", color: "#FF6C6C", desc: "An energy producer balancing commodity price volatility with long-term supply contracts." },
-      { ticker: "DELTA", color: "#FFB84D", desc: "A consumer staples conglomerate with defensive earnings but slow organic growth." },
+      { ticker: "ALPHA", color: "#00E5A0", desc: "Stock A — standard equity." },
+      { ticker: "BETA",  color: "#6C8EFF", desc: "Stock B — standard equity." },
+      { ticker: "GAMMA", color: "#FF6C6C", desc: "Stock C — standard equity." },
+      { ticker: "SIGMA", color: "#FFB84D", desc: "ETF — basket of ALPHA, BETA, GAMMA plus a mystery fourth stock (DELTA). Fair value = weighted average of all four components." },
     ],
   },
   {
     label: "Round 2",
     securities: [
-      { ticker: "ALPHA", color: "#00E5A0", desc: "Post-earnings surprise: beat on revenue but missed margins; market reassessing fair value." },
-      { ticker: "BETA",  color: "#6C8EFF", desc: "Central bank pivot speculation has driven sharp repricing across the yield curve." },
-      { ticker: "GAMMA", color: "#FF6C6C", desc: "Geopolitical supply disruption has created a volatile bid in spot and futures markets." },
-      { ticker: "DELTA", color: "#FFB84D", desc: "Activist investor disclosure triggers a takeover premium debate among participants." },
+      { ticker: "ALPHA",  color: "#00E5A0", desc: "Crypto A" },
+      { ticker: "BETA",   color: "#6C8EFF", desc: "Crypto B" },
+      { ticker: "GAMMA",  color: "#FF6C6C", desc: "Yes if ALPHA > BETA Pays 100 Per Contract If Outcome is Yes" },
+      { ticker: "SIGMA",  color: "#FFB84D", desc: "No if ALPHA > BETA Pays 100 Per Contract If Outcome is No" },
     ],
   },
   {
     label: "Round 3",
     securities: [
-      { ticker: "ALPHA", color: "#00E5A0", desc: "Macro shock scenario: recession fears drive correlation spikes and de-risking flows." },
-      { ticker: "BETA",  color: "#6C8EFF", desc: "Liquidity crunch forces forced selling; spread between bid and fair value widens sharply." },
-      { ticker: "GAMMA", color: "#FF6C6C", desc: "Flight-to-safety dynamics compress volatility while volume surges in defensive names." },
-      { ticker: "DELTA", color: "#FFB84D", desc: "Recovery trade emerges as policy response stabilises sentiment and risk appetite returns." },
+      { ticker: "ALPHA",  color: "#00E5A0",   desc: "Stock A — standard equity." },
+      { ticker: "BETA",   color: "#6C8EFF",   desc: "Stock B — standard equity." },
+      { ticker: "GAMMA",  color: "#FF6C6C",   desc: "True value is always |price(ALPHA) − price(BETA)|." },
+      { ticker: "SIGMA",  color: "#FFB84D",   desc: "Continuously compounding bond — accrues value every 10 seconds at a fixed rate unknown starting at $10." },
     ],
   },
 ];
@@ -44,6 +44,8 @@ interface PageHeaderProps {
   // Timer control (driven by WS)
   timerRunning?: boolean;
   timerResetKey?: number;
+  // Round state (driven by admin via WS)
+  currentRound?: 1 | 2 | 3 | null;
 }
 
 export default function PageHeader({
@@ -54,6 +56,7 @@ export default function PageHeader({
   onSignOut,
   timerRunning = false,
   timerResetKey = 0,
+  currentRound = null,
 }: PageHeaderProps) {
   const [seconds, setSeconds] = useState(TIMER_TOTAL);
   const [showInfo, setShowInfo] = useState(false);
@@ -78,69 +81,79 @@ export default function PageHeader({
   return (
     <>
       <div style={{
-        padding: "8px 20px", borderBottom: "1px solid #131825",
+        padding: "12px 28px", borderBottom: "1px solid #131825",
         display: "flex", justifyContent: "space-between", alignItems: "center",
         background: "linear-gradient(180deg,#0c0f17,#080a12)", flexShrink: 0,
         position: "relative", zIndex: 50,
       }}>
         {/* Left: logo + live indicator */}
-        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <div style={{
-              width: "28px", height: "28px", borderRadius: "6px",
+              width: "38px", height: "38px", borderRadius: "8px",
               background: "linear-gradient(135deg,#FFB84D,#FF8C00)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "13px", fontWeight: 900, color: "#0a0d14",
+              fontSize: "18px", fontWeight: 900, color: "#0a0d14",
             }}>M</div>
             <div>
-              <div style={{ fontSize: "13px", fontWeight: 800, color: "#e5e7eb", letterSpacing: "-0.3px" }}>MIG Quant Competition</div>
-              <div style={{ fontSize: "8px", color: "#3b4252", letterSpacing: "0.5px" }}>MICHIGAN INVESTMENT GROUP · 2026</div>
+              <div style={{ fontSize: "17px", fontWeight: 800, color: "#e5e7eb", letterSpacing: "-0.3px" }}>MIG Quant Competition</div>
+              <div style={{ fontSize: "10px", color: "#3b4252", letterSpacing: "0.5px" }}>MICHIGAN INVESTMENT GROUP · 2026</div>
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-            <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#00E5A0", animation: "livePulse 2s infinite" }} />
-            <span style={{ fontSize: "8px", color: "#00E5A0", fontWeight: 700, letterSpacing: "1px" }}>LIVE</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#00E5A0", animation: "livePulse 2s infinite" }} />
+            <span style={{ fontSize: "11px", color: "#00E5A0", fontWeight: 700, letterSpacing: "1px" }}>LIVE</span>
           </div>
+          {currentRound !== null && (
+            <div style={{
+              padding: "4px 10px", borderRadius: "5px",
+              background: "rgba(108,142,255,0.1)", border: "1px solid rgba(108,142,255,0.25)",
+              fontSize: "10px", fontWeight: 800, color: "#6C8EFF",
+              letterSpacing: "0.8px", fontFamily: "'Space Grotesk',sans-serif",
+            }}>
+              ROUND {currentRound}
+            </div>
+          )}
         </div>
 
         {/* Right: info + clock + optional trade controls */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           {/* Info button */}
           <button
             onClick={() => setShowInfo((v) => !v)}
             style={{
-              padding: "5px 10px", borderRadius: "6px", cursor: "pointer",
+              padding: "7px 14px", borderRadius: "7px", cursor: "pointer",
               border: showInfo ? "1px solid #2a3a5c" : "1px solid #1a1f2e",
               background: showInfo ? "#111827" : "#0f1219",
               color: showInfo ? "#6C8EFF" : "#4b5563",
-              fontSize: "12px", fontWeight: 700,
-              display: "flex", alignItems: "center", gap: "5px",
+              fontSize: "14px", fontWeight: 700,
+              display: "flex", alignItems: "center", gap: "6px",
               fontFamily: "'Space Grotesk',sans-serif",
               transition: "all 0.15s",
             }}
           >
-            <span style={{ fontSize: "13px", lineHeight: 1 }}>ⓘ</span>
-            <span style={{ fontSize: "10px", letterSpacing: "0.5px" }}>INFO</span>
+            <span style={{ fontSize: "16px", lineHeight: 1 }}>ⓘ</span>
+            <span style={{ fontSize: "12px", letterSpacing: "0.5px" }}>INFO</span>
           </button>
 
           {/* Timer */}
-          <div style={{ padding: "5px 12px", borderRadius: "6px", background: "#0f1219", border: `1px solid ${timerRunning ? "rgba(0,229,160,0.2)" : "#1a1f2e"}`, display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ fontSize: "8px", color: timerRunning ? "#00E5A0" : "#4b5563" }}>{timerRunning ? "LIVE" : "TIME"}</span>
+          <div style={{ padding: "7px 16px", borderRadius: "7px", background: "#0f1219", border: `1px solid ${timerRunning ? "rgba(0,229,160,0.2)" : "#1a1f2e"}`, display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "10px", color: timerRunning ? "#00E5A0" : "#4b5563" }}>{timerRunning ? "LIVE" : "TIME"}</span>
             <span style={{ fontSize: "14px", fontWeight: 800, color: seconds === 0 ? "#FF6C6C" : "#e5e7eb", fontFamily: "'JetBrains Mono',monospace", letterSpacing: "1px" }}>{clock}</span>
           </div>
 
           {onToggleInbox && (
             <button onClick={onToggleInbox} style={{
-              padding: "6px 10px", borderRadius: "6px", border: "1px solid #1a1f2e", cursor: "pointer",
-              background: showInbox ? "#151a27" : "#0f1219", color: "#e5e7eb", fontSize: "12px",
+              padding: "8px 13px", borderRadius: "7px", border: "1px solid #1a1f2e", cursor: "pointer",
+              background: showInbox ? "#151a27" : "#0f1219", color: "#e5e7eb", fontSize: "16px",
               display: "flex", alignItems: "center", position: "relative",
             }}>
               📨
               {unreadCount > 0 && (
                 <span style={{
-                  position: "absolute", top: "-3px", right: "-3px",
-                  background: "#FF6C6C", color: "#0a0d14", fontSize: "8px", fontWeight: 800,
-                  width: "14px", height: "14px", borderRadius: "50%",
+                  position: "absolute", top: "-4px", right: "-4px",
+                  background: "#FF6C6C", color: "#0a0d14", fontSize: "9px", fontWeight: 800,
+                  width: "16px", height: "16px", borderRadius: "50%",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontFamily: "'JetBrains Mono',monospace",
                 }}>{unreadCount}</span>
@@ -150,13 +163,13 @@ export default function PageHeader({
 
           {onSignOut && (
             <button onClick={onSignOut} disabled={isSigningOut} style={{
-              padding: "6px 10px", borderRadius: "6px", border: "1px solid #3b1820",
+              padding: "8px 13px", borderRadius: "7px", border: "1px solid #3b1820",
               cursor: isSigningOut ? "not-allowed" : "pointer",
-              background: "#140b10", color: "#ff8ea1", fontSize: "11px",
-              display: "flex", alignItems: "center", gap: "4px", fontWeight: 700,
+              background: "#140b10", color: "#ff8ea1", fontSize: "13px",
+              display: "flex", alignItems: "center", gap: "5px", fontWeight: 700,
               opacity: isSigningOut ? 0.6 : 1,
             }}>
-              ⎋ <span style={{ fontSize: "10px" }}>{isSigningOut ? "Signing Out..." : "Sign Out"}</span>
+              ⎋ <span style={{ fontSize: "12px" }}>{isSigningOut ? "Signing Out..." : "Sign Out"}</span>
             </button>
           )}
         </div>
@@ -176,47 +189,42 @@ export default function PageHeader({
           {/* Panel */}
           <div style={{
             position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", zIndex: 50,
-            width: "420px", background: "#0c0f17",
-            border: "1px solid #1a1f2e", borderRadius: "10px",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+            width: "740px", background: "#0c0f17",
+            border: "1px solid #1a1f2e", borderRadius: "12px",
+            boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
             animation: "fadeSlideDown 0.15s ease",
             overflow: "hidden",
           }}>
             {/* Panel header */}
             <div style={{
-              padding: "12px 16px 10px",
+              padding: "16px 22px 14px",
               borderBottom: "1px solid #131825",
               display: "flex", alignItems: "center", justifyContent: "space-between",
             }}>
-              <div>
-                <div style={{ fontSize: "12px", fontWeight: 800, color: "#e5e7eb", fontFamily: "'Space Grotesk',sans-serif" }}>
-                  Competition Rounds
-                </div>
-                <div style={{ fontSize: "9px", color: "#3b4252", marginTop: "2px", letterSpacing: "0.4px" }}>
-                  Securities & scenario overview
-                </div>
+              <div style={{ fontSize: "18px", fontWeight: 800, color: "#e5e7eb", fontFamily: "'Space Grotesk',sans-serif" }}>
+                Competition Rounds
               </div>
               <button
                 onClick={() => setShowInfo(false)}
                 style={{
                   background: "none", border: "none", cursor: "pointer",
-                  color: "#4b5563", fontSize: "16px", lineHeight: 1, padding: "2px 4px",
+                  color: "#4b5563", fontSize: "22px", lineHeight: 1, padding: "2px 6px",
                 }}
               >×</button>
             </div>
 
             {/* Round tabs */}
-            <div style={{ display: "flex", gap: "4px", padding: "10px 16px 0" }}>
+            <div style={{ display: "flex", gap: "6px", padding: "14px 22px 0" }}>
               {ROUNDS_INFO.map((round, i) => (
                 <button
                   key={i}
                   onClick={() => setActiveRound(i)}
                   style={{
-                    flex: 1, padding: "5px 0", borderRadius: "6px", cursor: "pointer",
+                    flex: 1, padding: "8px 0", borderRadius: "7px", cursor: "pointer",
                     border: activeRound === i ? "1px solid #2a3a5c" : "1px solid #131825",
                     background: activeRound === i ? "#111827" : "transparent",
                     color: activeRound === i ? "#e5e7eb" : "#4b5563",
-                    fontSize: "10px", fontWeight: 700,
+                    fontSize: "13px", fontWeight: 700,
                     fontFamily: "'Space Grotesk',sans-serif",
                     letterSpacing: "0.4px",
                     transition: "all 0.12s",
@@ -228,28 +236,28 @@ export default function PageHeader({
             </div>
 
             {/* Securities list */}
-            <div style={{ padding: "10px 16px 14px", display: "flex", flexDirection: "column", gap: "6px" }}>
+            <div style={{ padding: "14px 22px 20px", display: "flex", flexDirection: "column", gap: "8px" }}>
               {ROUNDS_INFO[activeRound].securities.map((sec) => (
                 <div
                   key={sec.ticker}
                   style={{
-                    padding: "10px 12px", borderRadius: "7px",
+                    padding: "13px 16px", borderRadius: "8px",
                     background: "#0a0d14", border: "1px solid #131825",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "5px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "9px", marginBottom: "6px" }}>
                     <div style={{
-                      width: "7px", height: "7px", borderRadius: "50%", flexShrink: 0,
+                      width: "9px", height: "9px", borderRadius: "50%", flexShrink: 0,
                       background: sec.color,
-                      boxShadow: `0 0 6px ${sec.color}66`,
+                      boxShadow: `0 0 7px ${sec.color}66`,
                     }} />
                     <span style={{
-                      fontSize: "11px", fontWeight: 800, color: sec.color,
+                      fontSize: "14px", fontWeight: 800, color: sec.color,
                       fontFamily: "'JetBrains Mono',monospace", letterSpacing: "0.5px",
                     }}>{sec.ticker}</span>
                   </div>
                   <div style={{
-                    fontSize: "10px", color: "#9ca3af", lineHeight: "1.5",
+                    fontSize: "12px", color: "#9ca3af", lineHeight: "1.6",
                     fontFamily: "'Space Grotesk',sans-serif",
                   }}>{sec.desc}</div>
                 </div>

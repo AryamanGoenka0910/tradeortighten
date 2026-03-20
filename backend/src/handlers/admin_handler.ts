@@ -1,7 +1,7 @@
 import { pool } from "../db.js";
 import type { EngineBridge } from "../order_book_engine/bridge_engine.js";
-import { sendToClient, broadcastOrderBook, broadcastAll } from "../lib/connection_manager.js";
-import { setTradingEnabled } from "../lib/trading_state.js";
+import { sendToClient, broadcastOrderBook, broadcastAll, getMidPrices, setMidPrice } from "../lib/connection_manager.js";
+import { setTradingEnabled, setCurrentRound, currentRound } from "../lib/trading_state.js";
 import { rowToOrderState, rowToPortfolio } from "../lib/order_utils.js";
 
 export type AdminMessage =
@@ -9,7 +9,9 @@ export type AdminMessage =
   | { clientId: string; type: "admin_cancel_order"; ownerId: string; orderId: number; assetId: number }
   | { clientId: string; type: "admin_toggle_trading"; enabled: boolean }
   | { clientId: string; type: "admin_timer_start" }
-  | { clientId: string; type: "admin_timer_reset" };
+  | { clientId: string; type: "admin_timer_reset" }
+  | { clientId: string; type: "admin_set_round"; round: 1 | 2 | 3 | null }
+  | { clientId: string; type: "admin_settle_asset";};
 
 async function queryOpenOrders() {
   const { rows } = await pool.query(`
@@ -156,6 +158,52 @@ export const handleAdminMessage = async (
     case "admin_timer_reset": {
       broadcastAll({ type: "timer_update", action: "reset", secondsRemaining: 600 });
       console.log("Timer reset by admin");
+      break;
+    }
+
+    case "admin_set_round": {
+      setCurrentRound(message.round);
+      broadcastAll({ type: "round_update", round: message.round });
+      console.log(`Round set to ${message.round ?? "null"} by admin`);
+      break;
+    }
+
+    case "admin_settle_asset": {
+      const prices = getMidPrices();
+
+      if (currentRound === 1) {
+        let newPrice = 0;
+        for (let i = 1; i <= 3; i++) {
+          newPrice += prices[i] ?? 50;
+        }
+        newPrice /= 3; 
+        newPrice += 62; //# of times Mich beat OSU
+        setMidPrice(4, newPrice);
+
+      } else if (currentRound === 2) {
+      
+        const priceA = prices[1] ?? 50;
+        const priceB = prices[2] ?? 50;
+        if (priceA > priceB) {
+          setMidPrice(3, 100);
+          setMidPrice(4, 0);
+        } else {
+          setMidPrice(3, 0);
+          setMidPrice(4, 100);
+        }
+
+
+      } else if (currentRound === 3) {
+        
+        const priceA = prices[1] ?? 50;
+        const priceB = prices[2] ?? 50;
+        const priceC = Math.abs(priceA - priceB);
+
+        setMidPrice(3, priceC);
+        setMidPrice(4, 184); //10 * 1.05^60 ≈ $184
+
+      }
+      broadcastAll({ type: "settlement_update", round: currentRound, prices: getMidPrices() });
       break;
     }
   }

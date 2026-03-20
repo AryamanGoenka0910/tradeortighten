@@ -60,6 +60,8 @@ type ClientMessage =
     | { clientId: string, type: "admin_toggle_trading", enabled: boolean }
     | { clientId: string, type: "admin_timer_start" }
     | { clientId: string, type: "admin_timer_reset" }
+    | { clientId: string, type: "admin_set_round", round: 1 | 2 | 3 | null }
+    | { clientId: string, type: "admin_settle_asset", assetId: number, settlementValue: number }
 
 wss.on("connection", (ws: WsWebSocket) => {
   console.log("Client connected");
@@ -93,6 +95,8 @@ wss.on("connection", (ws: WsWebSocket) => {
           case "admin_toggle_trading":
           case "admin_timer_start":
           case "admin_timer_reset":
+          case "admin_set_round":
+          case "admin_settle_asset":
             await handleAdminMessage(message, bridge);
             break;
         }

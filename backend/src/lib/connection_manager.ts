@@ -30,6 +30,10 @@ export const sendToClient = (clientId: string, payload: unknown): void => {
 
 export const getMidPrices = (): Record<number, number> => ({ ...midPrices });
 
+export const setMidPrice = (assetId: number, price: number): void => {
+  midPrices[assetId] = price;
+};
+
 export const broadcastOrderBook = (
   bids: { price: number; qty: number }[],
   asks: { price: number; qty: number }[],
@@ -40,14 +44,9 @@ export const broadcastOrderBook = (
   const bestBid = bids[0];
   const bestAsk = asks[0];
   if (bestBid && bestBid.qty > 0 && bestAsk && bestAsk.qty > 0) {
-    midPrices[assetId] = (bestBid.price + bestAsk.price) / 2;
-  } else if (bestBid && bestBid.qty > 0) {
-    midPrices[assetId] = bestBid.price;
-  } else if (bestAsk && bestAsk.qty > 0) {
-    midPrices[assetId] = bestAsk.price;
-  } else {
-    midPrices[assetId] = 50; // Default mid-price if no bids or asks
+    midPrices[assetId] = Math.round((bestBid.price + bestAsk.price) / 2);
   }
+  // One-sided book: keep last known mid-price to prevent manipulation via extreme orders.
   
   for (const [clientId] of clientSockets) {
     if (!clientId) continue;

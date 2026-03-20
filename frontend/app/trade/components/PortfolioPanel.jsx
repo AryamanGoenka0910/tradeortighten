@@ -41,17 +41,7 @@ export default function PortfolioPanel({ portfolio, orders, midPrices = {} }) {
     },
   }
 
-  for (const order of orders) {
-    if (order.side === "BUY") {
-      securities["CASH"].reservedValue += order.qty * order.price;
-      securities["CASH"].reservedPrice += order.qty * order.price;
-    } else {
-      securities["ALPHA"].reservedValue += order.qty * order.price;
-      securities["ALPHA"].reservedPrice += order.qty;
-    }
-  }
-
-  const portfolioValue = Object.values(securities).map((s) => (s.price * s.qty)).reduce((a, b) => a + b, 0);
+const portfolioValue = Object.values(securities).map((s) => (s.price * s.qty)).reduce((a, b) => a + b, 0);
 
   return (
     <div style={{

@@ -2,9 +2,10 @@ import { pool } from "../db.js";
 import type { EngineBridge } from "../order_book_engine/bridge_engine.js";
 import { rowToOrderState } from "../lib/order_utils.js";
 import { sendToClient, getMidPrices } from "../lib/connection_manager.js";
+import { currentRound } from "../lib/trading_state.js";
 
 const STARTING_CASH = 10000;
-const STARTING_ASSET1 = 100;
+const STARTING_ASSET = 1000;
 
 type InitialLoadMessage = {
   clientId: string;
@@ -21,7 +22,7 @@ export const handleInitialLoad = async (
 
   const clientPortfolioRes = await pool.query(
     "select * from trade_or_tighten.ensure_client_and_portfolio($1,$2,$3,$4)",
-    [message.clientId, message.clientName, STARTING_CASH, STARTING_ASSET1]
+    [message.clientId, message.clientName, STARTING_CASH, STARTING_ASSET]
   );
   const clientRow = clientPortfolioRes.rows[0];
 
@@ -74,6 +75,10 @@ export const handleInitialLoad = async (
       midPrice: currentMidPrices[Number(assetIdStr)] ?? 50,
       seq: Number(clientRow.last_seq),
     });
+  }
+
+  if (currentRound !== null) {
+    sendToClient(message.clientId, { type: "round_update", round: currentRound });
   }
 
   console.log("Initial load sent to: ", clientRow.client_id);
